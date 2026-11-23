@@ -3716,7 +3716,7 @@
               .map(cn)
               .join("")
           : ""
-      }</div></div></div>`;
+      }</div></div><p class="small" style="grid-column:1/-1;margin:2px 0 0">В этом задании у грани один верный куб. Балл — насколько твои углы совпали с ним: 100 — точно, 0 — в среднем дальше 12% длины ребра. Верный куб — зелёный, клавиша Space.</p></div>`;
     } else
       s.score &&
         (o += `<div class="card scorecard">${an(s.score.total, Gt(s.score.total))}<div><p class="grade">${Yn(s.score.grade)}</p><div class="parts">${s.score.parts.map(cn).join("")}</div></div></div>`);

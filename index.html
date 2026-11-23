@@ -2245,20 +2245,21 @@ h1 { font-size: 19px; line-height: 1.1; margin: 0; font-weight: 700; letter-spac
       y.segs.forEach((S) => m.push({ ...S, stroke: u, hidden: !!i.hidden }));
     });
     let v = analyzeSegs(m, b, e);
-    // Повторный разбор: если часть линий не стала рёбрами, возможно, два ребра слились в одну линию
-    // (пологий излом или угол, попавший на продолжение соседнего ребра). Разрезаем такие линии
-    // и разбираем рисунок заново; разрез оставляем, только если он объясняет больше линий.
-    // Число попыток фиксировано (а не время), чтобы результат не зависел от скорости компьютера.
-    if (v.lines.length >= 7 && v.lines.length <= 18 && unexplainedFrac(v) > 0.04) {
+    // Повторный разбор: возможно, два ребра слились в одну линию (пологий излом, угол на продолжении
+    // соседнего ребра, или в ракурсе «углом к зрителю» рёбра от ближнего и невидимого угла легли на
+    // одну прямую). Признаки: часть линий не стала рёбрами или ни одна настоящая коробка не подходит.
+    // Разрезаем подозрительные линии и разбираем заново; разрез оставляем, только если он объясняет
+    // рисунок заметно лучше. Число попыток фиксировано, чтобы результат не зависел от скорости компьютера.
+    if (v.lines.length >= 7 && v.lines.length <= 18 && needsRetry(v)) {
       let attempts = 0;
       // предварительный результат сразу, уточнённый — следом
       e.onPartial && ((v.ms = zt() - n), e.onPartial(v));
-      for (let round = 0; round < 3 && unexplainedFrac(v) > 0.04; round++) {
+      for (let round = 0; round < 3 && needsRetry(v); round++) {
         let improved = !1;
         for (let cand of cutCandidates(m, v.lines).slice(0, 4)) {
           if (attempts++ >= (e.maxRetries ?? 4)) break;
           let v2 = analyzeSegs(cand.m, b, e);
-          if (v2.boxes.length >= v.boxes.length && unexplainedFrac(v2) < unexplainedFrac(v) - 0.03) {
+          if (v2.boxes.length >= v.boxes.length && parseQuality(v2) < parseQuality(v) - 0.015) {
             (v = v2), (m = cand.m), (improved = !0);
             break;
           }
@@ -2267,6 +2268,18 @@ h1 { font-size: 19px; line-height: 1.1; margin: 0; font-weight: 700; letter-spac
       }
     }
     return (v.ms = zt() - n), v;
+  }
+  // Насколько плохо даже лучшая настоящая коробка повторяет рисунок (среднее по коробкам).
+  function fitBadness(v) {
+    let r = v.boxes.map((x) => (x.diag && x.diag.implied ? x.diag.implied.rel : 0.2));
+    return r.length ? r.reduce((g, s) => g + s, 0) / r.length : 0.2;
+  }
+  function needsRetry(v) {
+    return unexplainedFrac(v) > 0.04 || fitBadness(v) > 0.03;
+  }
+  // Меньше — лучше: неразобранные линии плюс несогласованность с настоящей коробкой.
+  function parseQuality(v) {
+    return unexplainedFrac(v) + Math.min(0.25, fitBadness(v));
   }
   // Доля длины линий, которые не удалось сделать рёбрами коробки.
   function unexplainedFrac(v) {
@@ -2323,7 +2336,12 @@ h1 { font-size: 19px; line-height: 1.1; margin: 0; font-weight: 700; letter-spac
           let dd = Math.abs(tv - t0);
           j > 1 && j < ts.length - 2 && dd < bd && ((bd = dd), (k = j));
         });
-        repl.set(i, splitSeg(s, k, id)), (any = !0);
+        // сторона куска — по положению вдоль L, а не по порядку точек в штрихе
+        let parts = splitSeg(s, k, id).map((q) => {
+          let mt = q.pts.reduce((g, p) => g + ct(L, p), 0) / q.pts.length;
+          return { ...q, cut: [...(s.cut || []), { id, side: mt < t0 ? 0 : 1 }] };
+        });
+        repl.set(i, parts), (any = !0);
       } else {
         let side = (lo + hi) / 2 < t0 ? 0 : 1;
         repl.set(i, [{ ...s, cut: [...(s.cut || []), { id, side }] }]);
@@ -2335,6 +2353,28 @@ h1 { font-size: 19px; line-height: 1.1; margin: 0; font-weight: 700; letter-spac
     let out = [];
     m.forEach((s, i) => (repl.has(i) ? out.push(...repl.get(i)) : out.push(s)));
     return out;
+  }
+  // «Расклеить» линию по штрихам: группы штрихов, идущие друг за другом (а не поверх друг друга),
+  // больше не сливаются. Штрихи не режутся — важно, когда два ребра перекрываются на участке.
+  function unmergeLine(m, L, t0) {
+    if (L.members.length < 2) return null;
+    let id = ++cutSeq,
+      span = (i) => {
+        let ts = m[i].pts.map((p) => ct(L, p));
+        return [Math.min(...ts), Math.max(...ts)];
+      },
+      mem = L.members.map((i) => ({ i, sp: span(i) })),
+      sides = mem.map(({ sp }) => ((sp[0] + sp[1]) / 2 < t0 ? 0 : 1));
+    if (new Set(sides).size < 2) return null;
+    // сторона 0 и сторона 1 не должны лежать друг на друге почти целиком (это обводка)
+    let lo = mem.filter((q, k) => !sides[k]),
+      hi = mem.filter((q, k) => sides[k]),
+      a = [Math.min(...lo.map((q) => q.sp[0])), Math.max(...lo.map((q) => q.sp[1]))],
+      b = [Math.min(...hi.map((q) => q.sp[0])), Math.max(...hi.map((q) => q.sp[1]))],
+      ov = Math.min(a[1], b[1]) - Math.max(a[0], b[0]);
+    if (ov > 0.5 * Math.min(a[1] - a[0], b[1] - b[0])) return null;
+    let side = new Map(mem.map((q, k) => [q.i, sides[k]]));
+    return m.map((s, i) => (side.has(i) ? { ...s, cut: [...(s.cut || []), { id, side: side.get(i) }] } : s));
   }
   // Кандидаты на разрез: Т-стыки (конец одной линии упирается в середину другой) и пологие изломы.
   function cutCandidates(m, lines) {
@@ -2353,8 +2393,10 @@ h1 { font-size: 19px; line-height: 1.1; margin: 0; font-weight: 700; letter-spac
             fr = (t0 - L.t0) / (L.len || 1);
           if (fr < 0.12 || fr > 0.88 || seen.some((q) => q.li === li && Math.abs(q.t - t0) < tol)) continue;
           seen.push({ li, t: t0 });
-          let m2 = cutLineAt(m, L, t0);
+          let m2 = cutLineAt(m, L, t0),
+            m3 = unmergeLine(m, L, t0);
           m2 && out.push({ m: m2, score: 1e4 + L.len * Math.min(fr, 1 - fr) });
+          m3 && out.push({ m: m3, score: 1e4 + L.len * Math.min(fr, 1 - fr) + 1 });
         }
       });
     });
@@ -2723,7 +2765,7 @@ h1 { font-size: 19px; line-height: 1.1; margin: 0; font-weight: 700; letter-spac
   function ne(t, e, n) {
     return ke(te(t, e), n);
   }
-  self.__internals = { analyze: te, segment: Ft, mergeLines: Tt, fit: H, fitConstrained: Zt };
+  self.__internals = { buildGraph: Dt, cutCandidates, analyzeSegs, parseQuality, analyze: te, segment: Ft, mergeLines: Tt, fit: H, fitConstrained: Zt };
   self.onmessage = (t) => {
     let { id: e, strokes: n, opt: r, truth: a } = t.data;
     try {
@@ -6453,7 +6495,7 @@ h1 { font-size: 19px; line-height: 1.1; margin: 0; font-weight: 700; letter-spac
               .map(cn)
               .join("")
           : ""
-      }</div></div></div>`;
+      }</div></div><p class="small" style="grid-column:1/-1;margin:2px 0 0">В этом задании у грани один верный куб. Балл — насколько твои углы совпали с ним: 100 — точно, 0 — в среднем дальше 12% длины ребра. Верный куб — зелёный, клавиша Space.</p></div>`;
     } else
       s.score &&
         (o += `<div class="card scorecard">${an(s.score.total, Gt(s.score.total))}<div><p class="grade">${Yn(s.score.grade)}</p><div class="parts">${s.score.parts.map(cn).join("")}</div></div></div>`);

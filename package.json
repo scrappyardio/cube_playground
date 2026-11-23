@@ -9,6 +9,7 @@
     "fuzz": "node bench/fuzz.mjs 200",
     "scale": "node bench/scale.mjs 10",
     "e2e": "node tests/e2e.mjs",
-    "test": "node build.mjs && node bench/fuzz.mjs 60 && node bench/run.mjs 15 && node tests/e2e.mjs"
+    "face": "node bench/face.mjs 30",
+    "test": "node build.mjs && node bench/fuzz.mjs 60 && node bench/run.mjs 15 && node bench/face.mjs 10 && node tests/e2e.mjs"
   }
 }

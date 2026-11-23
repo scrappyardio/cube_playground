@@ -42,6 +42,10 @@ export const SCENARIOS = {
   bad_props: { target: "cube", bad: true, props: 1.45 },
   bad_reverse: { target: "cube", bad: true, reverse: true, gen: { f: 900, minCone: 16 } },
   bad_box_corner: { target: "box", bad: true, dims: true, corner: "outer", shift: 0.1 },
+  // ракурс «углом к зрителю»: ближний и невидимый углы почти совпадают, все рёбра сплошные
+  ok_cornerview: { target: "cube", bad: false, hidden: "solid", cornerView: true },
+  ok_cornerview_hand: { target: "cube", bad: false, hidden: "solid", cornerView: true, style: "sloppy" },
+  bad_cornerview: { target: "cube", bad: true, hidden: "solid", cornerView: true, corner: "outer", shift: 0.09 },
 };
 
 export function makeCase(name, seed) {
@@ -55,7 +59,18 @@ export function makeCase(name, seed) {
   }
   if (sc.props) D = [1, 1, sc.props].map((x) => x / Math.cbrt(sc.props));
   let B = null;
-  for (let i = 0; i < 50 && !B; i++) B = S.ce(rng, { page: PAGE, D, maxCone: 30, ...(sc.gen || {}) });
+  // ближний угол — общий у трёх видимых граней, невидимый — у трёх невидимых
+  const cornerGap = (B) => {
+    const vis = S.K.map((f, i) => B.faceVis[i]);
+    const near = [...Array(8).keys()].find((v) => S.K.every((f, i) => !f.v.includes(v) || vis[i]));
+    const far = near ^ 7;
+    const xs = B.P.map((p) => p[0]);
+    return near === undefined ? 1 : Math.hypot(B.P[near][0] - B.P[far][0], B.P[near][1] - B.P[far][1]) / (Math.max(...xs) - Math.min(...xs));
+  };
+  for (let i = 0; i < (sc.cornerView ? 4000 : 50) && !B; i++) {
+    B = S.ce(rng, { page: PAGE, D, maxCone: 30, ...(sc.gen || {}) });
+    if (B && sc.cornerView && cornerGap(B) > 0.2) B = null;
+  }
   if (!B) return null;
   const edges = S.Ne(B);
   let P = B.P.map((p) => p.slice());
