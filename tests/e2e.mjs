@@ -157,6 +157,19 @@ try {
   ok(errors.length === 0, "ошибок в консоли нет" + (errors.length ? ": " + errors.join(" | ") : ""));
   await ctx.close();
 
+  // 9б. Рисунок, где два ребра слились в линию: сначала предварительный ответ, потом уточнённый
+  console.log("Повторный разбор слившихся рёбер");
+  const c2 = makeCase("bad_corner_inner", 11);
+  ({ ctx, page, errors } = await openPage(browser, { storage: JSON.stringify({ free: c2.strokes.map((s) => ({ pts: s.pts, hidden: !!s.hidden })), target: "cube", layers: {} }) }));
+  const sawPartial = page.waitForFunction(() => /уточняю/.test(document.getElementById("status").textContent), null, { timeout: 15000 }).then(() => true, () => false);
+  await waitAnalysis(page);
+  ok(await sawPartial, "сначала показан предварительный разбор («уточняю…»)");
+  const fin = await page.evaluate(() => { const r = window.perspectiveChecker.state.result; return { loose: r.loose.length, sev: Math.max(0, ...r.boxes[0].diag.issues.map((i) => i.sev)) }; });
+  ok(fin.loose === 0 && fin.sev >= 2, `после уточнения все линии стали рёбрами, ошибка найдена (неразобрано ${fin.loose})`);
+  ok(!/уточняю/.test(await status(page)), "итоговый статус без «уточняю»");
+  ok(errors.length === 0, "ошибок в консоли нет" + (errors.length ? ": " + errors.join(" | ") : ""));
+  await ctx.close();
+
   // 10. Без Web Worker анализ идёт в основном потоке тем же кодом
   console.log("Запасной режим без Worker");
   ({ ctx, page, errors } = await openPage(browser, { noWorker: true, storage: "" }));

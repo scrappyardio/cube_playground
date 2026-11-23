@@ -1927,11 +1927,15 @@
     // Повторный разбор: если часть линий не стала рёбрами, возможно, два ребра слились в одну линию
     // (пологий излом или угол, попавший на продолжение соседнего ребра). Разрезаем такие линии
     // и разбираем рисунок заново; разрез оставляем, только если он объясняет больше линий.
+    // Число попыток фиксировано (а не время), чтобы результат не зависел от скорости компьютера.
     if (v.lines.length >= 7 && v.lines.length <= 18 && unexplainedFrac(v) > 0.04) {
-      for (let round = 0; round < 4 && unexplainedFrac(v) > 0.04; round++) {
+      let attempts = 0;
+      // предварительный результат сразу, уточнённый — следом
+      e.onPartial && ((v.ms = zt() - n), e.onPartial(v));
+      for (let round = 0; round < 3 && unexplainedFrac(v) > 0.04; round++) {
         let improved = !1;
-        for (let cand of cutCandidates(m, v.lines).slice(0, 5)) {
-          if (zt() - n > (e.retryBudget ?? 2500)) break;
+        for (let cand of cutCandidates(m, v.lines).slice(0, 4)) {
+          if (attempts++ >= (e.maxRetries ?? 4)) break;
           let v2 = analyzeSegs(cand.m, b, e);
           if (v2.boxes.length >= v.boxes.length && unexplainedFrac(v2) < unexplainedFrac(v) - 0.03) {
             (v = v2), (m = cand.m), (improved = !0);
@@ -2402,7 +2406,8 @@
   self.onmessage = (t) => {
     let { id: e, strokes: n, opt: r, truth: a } = t.data;
     try {
-      self.postMessage({ id: e, result: ne(n, r, a) });
+      let onPartial = (v) => self.postMessage({ id: e, result: ke(v, a), partial: !0 });
+      self.postMessage({ id: e, result: ne(n, { ...r, onPartial }, a) });
     } catch (o) {
       self.postMessage({ id: e, error: String((o && o.stack) || o) });
     }

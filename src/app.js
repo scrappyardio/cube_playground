@@ -2626,6 +2626,11 @@
       let w = new Worker(wURL);
       return (
         (w.onmessage = (e) => {
+          if (e.data.partial) {
+            e.data.id === ge &&
+              (Me(e.data.result), Zt(D("status").textContent + " \xB7 \u0443\u0442\u043E\u0447\u043D\u044F\u044E\u2026"));
+            return;
+          }
           if (((wBusy = !1), e.data.id !== ge)) return;
           if (((M.busy = !1), e.data.error)) {
             console.error(e.data.error), Zt("\u043E\u0448\u0438\u0431\u043A\u0430 \u0430\u043D\u0430\u043B\u0438\u0437\u0430");
