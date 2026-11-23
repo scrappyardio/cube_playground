@@ -16,8 +16,8 @@ export function run(faceLabels, seed = 1, user = U) {
   const st = S._e(user, edges.filter((e) => !gset.has([e.a, e.b].sort().join("-"))), rng, { hidden: "solid" }).strokes.map((q) => ({ pts: q.pts, hidden: false }));
   const r = an([...given, ...st], { target: "cube", page: { w: 1600, h: 1000 } }, { P: T, given: faceLabels });
   const b = r.boxes[0];
-  const h = r.truth ? r.truth.rms / (b.diag.scale || 1) : 1;
-  return { score: Math.round(Math.max(0, Math.min(100, (100 * (0.12 - h)) / (0.12 - 0.012)))), rms: r.truth && Math.round(r.truth.rms), lines: r.lines.length, loose: r.loose.length, fams: b?.diag.families.map((f) => f.n + "/" + (f.maxAbs ?? 0).toFixed(1)).join(" "), issues: b?.diag.issues.map((i) => i.sev + ":" + i.kind).join(" ") };
+  const x = r.truth && r.truth.rms !== null ? Math.max(0, r.truth.rms / (b.diag.scale || 1) - 0.012) / 0.05 : 9;
+  return { score: Math.round(100 / (1 + x * x)), rms: r.truth && Math.round(r.truth.rms), lines: r.lines.length, loose: r.loose.length, fams: b?.diag.families.map((f) => f.n + "/" + (f.maxAbs ?? 0).toFixed(1)).join(" "), issues: b?.diag.issues.map((i) => i.sev + ":" + i.kind).join(" ") };
 }
 if (import.meta.url === `file://${process.argv[1]}`) {
   for (const face of [[0, 1, 3, 2], [0, 2, 6, 4], [0, 1, 5, 4]])

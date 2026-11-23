@@ -2424,8 +2424,9 @@
         };
       }),
       a = r.filter((m) => !m.given),
-      o = Math.sqrt(a.reduce((m, b) => m + b.d * b.d, 0) / (a.length || 1));
-    return { corners: r, rms: o, map: [...Array(8)].map((m, b) => n.s(b)) };
+      // пока новых углов нет, сравнивать не с чем (раньше тут выходило «0 пикс.» и 100 баллов)
+      o = a.length ? Math.sqrt(a.reduce((m, b) => m + b.d * b.d, 0) / a.length) : null;
+    return { corners: r, rms: o, nNew: a.length, map: [...Array(8)].map((m, b) => n.s(b)) };
   }
   function ke(t, e) {
     let n = {

@@ -250,6 +250,30 @@ try {
   ok(/одной длины/.test(await page.locator(".fix").innerText()), "в отчёте: все направления одной длины");
   await ctx.close();
 
+  // 9д. Режим «по грани»: пока куб не дорисован, оценки нет (раньше было 100 за каждую линию)
+  console.log("Режим «Достроить по грани»");
+  ({ ctx, page, errors } = await openPage(browser, { storage: "" }));
+  await page.click("#mFace");
+  await page.waitForTimeout(300);
+  const fv = await page.evaluate(() => { const f = window.perspectiveChecker.state.face; return { P: f.B.P, labels: f.labels }; });
+  const other = [0, 1, 2, 3, 4, 5, 6, 7].find((k) => !fv.labels.includes(k) && fv.labels.some((l) => [1, 2, 4].includes(l ^ k)));
+  const from = fv.labels.find((l) => [1, 2, 4].includes(l ^ other));
+  await page.click("#toolLine");
+  await drawStroke(page, [fv.P[from], fv.P[other]]);
+  await waitAnalysis(page);
+  const rep1 = await page.locator("#report").innerText();
+  ok(/Дорисуй куб/i.test(rep1) && !/Почти точно|ошибка/i.test(rep1), "после одной линии — «Дорисуй куб», а не 100: " + rep1.slice(0, 160).replace(/\n/g, " / "));
+  // дорисовываем остальные рёбра точно по ответу — оценка высокая
+  const key = (a, b) => [a, b].sort().join("-");
+  const gset = new Set(fv.labels.map((l, i) => key(l, fv.labels[(i + 1) % 4])));
+  for (let a = 0; a < 8; a++) for (const d of [1, 2, 4]) { const b = a ^ d; if (a < b && !gset.has(key(a, b)) && !(a === from && b === other) && !(b === from && a === other)) await drawStroke(page, [fv.P[a], fv.P[b]]); }
+  await waitAnalysis(page);
+  const rep2 = await page.locator("#report").innerText();
+  const ring = await page.locator(".scorecard .ring text").textContent();
+  ok(+ring >= 90, `точно дорисованный куб: ${ring} баллов`);
+  ok(errors.length === 0, "ошибок в консоли нет" + (errors.length ? ": " + errors.join(" | ") : ""));
+  await ctx.close();
+
   // 10. Без Web Worker анализ идёт в основном потоке тем же кодом
   console.log("Запасной режим без Worker");
   ({ ctx, page, errors } = await openPage(browser, { noWorker: true, storage: "" }));

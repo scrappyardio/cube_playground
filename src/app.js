@@ -3650,6 +3650,12 @@
               ? "\u043F\u043E\u0440\u0442\u0440\u0435\u0442\u043D\u044B\u0439"
               : "\u0442\u0435\u043B\u0435\u0432\u0438\u043A, \u043F\u043E\u0447\u0442\u0438 \u0431\u0435\u0437 \u043F\u0435\u0440\u0441\u043F\u0435\u043A\u0442\u0438\u0432\u044B";
   }
+  // Балл режима «по грани» по среднему расстоянию углов до ответа (в долях длины ребра).
+  // Плавная кривая без обрыва в ноль: 1,2% → 100, 5% → ≈70, 12% → ≈20, 20% → ≈7.
+  function faceScore(h) {
+    let x = Math.max(0, h - 0.012) / 0.05;
+    return Math.round(100 / (1 + x * x));
+  }
   // Карточка «Пропорции»: грани восстановленной коробки, развёрнутые к зрителю, поверх квадрата.
   function faceSvg(i, j, a, b, cube, off) {
     let u = 70 / Math.max(a, b, cube ? 1 : 0),
@@ -3704,9 +3710,11 @@
       s = n.diag,
       o = "",
       a = M.mode === "face" && e.truth;
-    if (a) {
+    if (a && (a.nNew || 0) < 3)
+      o += `<div class="card"><h2>Дорисуй куб</h2><p style="margin:0">Новых углов найдено: <b>${a.nNew || 0}</b> из 4 (невидимый угол можно не рисовать). Оценка появится, когда углов будет хотя бы три.</p></div>`;
+    else if (a) {
       let h = a.rms / (s.scale || 1),
-        u = Math.round(Math.max(0, Math.min(100, (100 * (0.12 - h)) / (0.12 - 0.012))));
+        u = faceScore(h);
       o += `<div class="card scorecard">${an(u, Gt(u))}<div><p class="grade">${u >= 90 ? "\u041F\u043E\u0447\u0442\u0438 \u0442\u043E\u0447\u043D\u043E" : u >= 70 ? "\u0411\u043B\u0438\u0437\u043A\u043E" : u >= 45 ? "\u0415\u0441\u0442\u044C \u0440\u0430\u0441\u0445\u043E\u0436\u0434\u0435\u043D\u0438\u044F" : "\u0414\u0430\u043B\u0435\u043A\u043E \u043E\u0442 \u043E\u0442\u0432\u0435\u0442\u0430"}</p>
       <div class="parts"><div class="part"><span>\u0423\u0433\u043B\u044B \u0432 \u0441\u0440\u0435\u0434\u043D\u0435\u043C \u043E\u0442 \u043F\u0440\u0430\u0432\u0438\u043B\u044C\u043D\u044B\u0445</span><b>${Math.round(a.rms)}</b><div class="bar"><i style="width:${u}%;background:${Gt(u)}"></i></div></div>
       ${
@@ -3716,7 +3724,7 @@
               .map(cn)
               .join("")
           : ""
-      }</div></div><p class="small" style="grid-column:1/-1;margin:2px 0 0">В этом задании у грани один верный куб. Балл — насколько твои углы совпали с ним: 100 — точно, 0 — в среднем дальше 12% длины ребра. Верный куб — зелёный, клавиша Space.</p></div>`;
+      }</div></div><p class="small" style="grid-column:1/-1;margin:2px 0 0">В этом задании у грани один верный куб. Балл — насколько твои углы совпали с ним: 100 — точно, 70 — в среднем на 5% длины ребра, 20 — на 12%. Куда сдвинуть углы, видно на зелёном верном кубе (Space).</p></div>`;
     } else
       s.score &&
         (o += `<div class="card scorecard">${an(s.score.total, Gt(s.score.total))}<div><p class="grade">${Yn(s.score.grade)}</p><div class="parts">${s.score.parts.map(cn).join("")}</div></div></div>`);
@@ -3734,12 +3742,14 @@
       o += `<div class="card"><h2>\u0412\u0441\u0435 \u043A\u043E\u0440\u043E\u0431\u043A\u0438 \u043E\u0434\u043D\u0438\u043C \u0432\u0437\u0433\u043B\u044F\u0434\u043E\u043C</h2>${h.length ? h.map((u) => `<ul class="issues"><li class="issue" data-sev="2" data-box="${u.box}"><h3><span class="sevtag">\u043E\u0448\u0438\u0431\u043A\u0430</span>\u041A\u043E\u0440\u043E\u0431\u043A\u0430 ${u.box + 1} \u043D\u0430\u0440\u0438\u0441\u043E\u0432\u0430\u043D\u0430 \u0441 \u0434\u0440\u0443\u0433\u043E\u0439 \u043F\u0435\u0440\u0441\u043F\u0435\u043A\u0442\u0438\u0432\u043E\u0439</h3><p>${u.fRatio < 0.8 ? `\u0415\u0451 \u0440\u0451\u0431\u0440\u0430 \u0441\u0445\u043E\u0434\u044F\u0442\u0441\u044F \u0437\u0430\u043C\u0435\u0442\u043D\u043E \u0441\u0438\u043B\u044C\u043D\u0435\u0435, \u0447\u0435\u043C \u0443 \u043E\u0441\u0442\u0430\u043B\u044C\u043D\u044B\u0445: \u0431\u0443\u0434\u0442\u043E \u0441\u043D\u044F\u0442\u0430 \u043E\u0431\u044A\u0435\u043A\u0442\u0438\u0432\u043E\u043C \u0432 ${Et(1 / u.fRatio)} \u0440\u0430\u0437\u0430 \u043A\u043E\u0440\u043E\u0447\u0435.` : u.fRatio > 1.25 ? `\u0415\u0451 \u0440\u0451\u0431\u0440\u0430 \u0441\u0445\u043E\u0434\u044F\u0442\u0441\u044F \u0437\u0430\u043C\u0435\u0442\u043D\u043E \u0441\u043B\u0430\u0431\u0435\u0435, \u0447\u0435\u043C \u0443 \u043E\u0441\u0442\u0430\u043B\u044C\u043D\u044B\u0445: \u0431\u0443\u0434\u0442\u043E \u0441\u043D\u044F\u0442\u0430 \u043E\u0431\u044A\u0435\u043A\u0442\u0438\u0432\u043E\u043C \u0432 ${Et(u.fRatio)} \u0440\u0430\u0437\u0430 \u0434\u043B\u0438\u043D\u043D\u0435\u0435.` : "\u0415\u0451 \u0442\u043E\u0447\u043A\u0438 \u0441\u0445\u043E\u0434\u0430 \u0442\u0440\u0435\u0431\u0443\u044E\u0442 \u0434\u0440\u0443\u0433\u043E\u0433\u043E \u0446\u0435\u043D\u0442\u0440\u0430 \u0432\u0437\u0433\u043B\u044F\u0434\u0430."} \u0421 \u043E\u0431\u0449\u0435\u0439 \u043A\u0430\u043C\u0435\u0440\u043E\u0439 \u0435\u0451 \u0443\u0433\u043B\u044B \u043F\u0440\u0438\u0448\u043B\u043E\u0441\u044C \u0431\u044B \u0441\u0434\u0432\u0438\u043D\u0443\u0442\u044C \u0432 \u0441\u0440\u0435\u0434\u043D\u0435\u043C \u043D\u0430 ${Math.round(u.fixedRel * (s.scale || 1) * 100) / 100 > 0 ? Math.round(u.fixedRel * 100) + "% \u0440\u0435\u0431\u0440\u0430" : "\u043D\u0435\u043C\u043D\u043E\u0433\u043E"}.</p></li></ul>`).join("") : '<ul class="good"><li>\u0412\u0441\u0435 \u043A\u043E\u0440\u043E\u0431\u043A\u0438 \u0441\u043E\u0433\u043B\u0430\u0441\u043E\u0432\u0430\u043D\u044B \u0441 \u043E\u0434\u043D\u043E\u0439 \u043A\u0430\u043C\u0435\u0440\u043E\u0439: \u043E\u0434\u0438\u043D \u0433\u043E\u0440\u0438\u0437\u043E\u043D\u0442, \u043E\u0434\u0438\u043D \u0446\u0435\u043D\u0442\u0440 \u0432\u0437\u0433\u043B\u044F\u0434\u0430.</li></ul>'}
       <dl class="facts" style="margin-top:8px"><dt>\u041E\u0431\u0449\u0438\u0439 \u043E\u0431\u044A\u0435\u043A\u0442\u0438\u0432</dt><dd class="mono">\u2248 ${Math.round(me(e.scene.f))} \u043C\u043C \xB7 ${rn(me(e.scene.f))}</dd></dl></div>`;
     }
-    let f = s.issues;
+    // пока куб в задании «по грани» не дорисован, замечания преждевременны
+    let f = a && (a.nNew || 0) < 3 ? [] : s.issues;
     (o += `<div class="card"><h2>${f.filter((h) => h.sev >= 1).length ? "\u0427\u0442\u043E \u0438\u0441\u043F\u0440\u0430\u0432\u0438\u0442\u044C" : "\u0420\u0430\u0437\u0431\u043E\u0440"}</h2>`),
       f.length
         ? (o += `<ul class="issues">${f.map((h, u) => `<li class="issue" data-sev="${h.sev}" data-i="${u}" tabindex="0"><h3><span class="sevtag">${Kn[h.sev]}</span>${de(h.title)}</h3><p>${de(h.text)}</p></li>`).join("")}</ul>`)
         : (o +=
-            '<p style="margin:0;color:var(--muted)">\u041E\u0448\u0438\u0431\u043E\u043A \u043F\u0435\u0440\u0441\u043F\u0435\u043A\u0442\u0438\u0432\u044B \u043D\u0435 \u043D\u0430\u0448\u043B\u043E\u0441\u044C.</p>'),
+            '<p style="margin:0;color:var(--muted)">' + (a && (a.nNew || 0) < 3 ? "Разбор появится, когда куб будет дорисован." : "\u041E\u0448\u0438\u0431\u043E\u043A \u043F\u0435\u0440\u0441\u043F\u0435\u043A\u0442\u0438\u0432\u044B \u043D\u0435 \u043D\u0430\u0448\u043B\u043E\u0441\u044C.") + '</p>'),
+      !(a && (a.nNew || 0) < 3) &&
       s.good.length &&
         (o += `<ul class="good">${s.good.map((h) => `<li class="${h.kind === "few" ? "info" : ""}">${de(h.text)}</li>`).join("")}</ul>`),
       (o += "</div>"),

@@ -8,8 +8,10 @@ const N = +(process.argv[2] || 30);
 const faceScore = (r) => {
   const b = r.boxes[0];
   if (!b || !r.truth) return null;
-  const h = r.truth.rms / (b.diag.scale || 1);
-  return Math.round(Math.max(0, Math.min(100, (100 * (0.12 - h)) / (0.12 - 0.012))));
+  if (r.truth.nNew < 3) return null;
+  // как faceScore в src/app.js
+  const x = Math.max(0, r.truth.rms / (b.diag.scale || 1) - 0.012) / 0.05;
+  return Math.round(100 / (1 + x * x));
 };
 export function makeFaceTask(seed) {
   const t = S.re(seed * 977 + 5);
@@ -56,4 +58,13 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const bad = res.filter((r) => r.lines !== 12 || r.score < 30);
   console.log(`рисунок со скриншота (углом к зрителю): баллы ${res.map((r) => r.score).join(", ")}, линий ${res.map((r) => r.lines).join(", ")} — ${bad.length ? "СНОВА СКЛЕЙКА" : "разобран верно"}`);
   process.exitCode = bad.length ? 1 : 0;
+}
+// Второй рисунок пользователя: пока углов мало — «дорисуй» (а не 100), в конце — не обрыв в 0.
+if (import.meta.url === `file://${process.argv[1]}`) {
+  const { steps } = await import("./repro_face_partial.mjs");
+  const st = steps([0, 1, 3, 2]);
+  const okEarly = st.slice(0, 4).every((x) => /дорисуй/.test(x));
+  const last = parseInt(st[st.length - 1]);
+  console.log(`рисунок со скриншота (дорисовка по одному ребру): ${st.join(" → ")} — ${okEarly && last > 0 && last < 60 ? "верно" : "НЕВЕРНО"}`);
+  if (!(okEarly && last > 0 && last < 60)) process.exitCode = 1;
 }
