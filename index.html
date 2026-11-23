@@ -72,6 +72,31 @@ h1 { font-size: 19px; line-height: 1.1; margin: 0; font-weight: 700; letter-spac
 .zoom { position: absolute; right: 10px; bottom: 10px; display: flex; gap: 4px }
 .zoom button { border: 1px solid var(--line); background: var(--surface); border-radius: 7px; padding: 4px 9px; font-size: 12px; cursor: pointer }
 
+/* ---------- образец для срисовки ---------- */
+.ref { position: absolute; right: 10px; top: 10px; width: 240px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 8px; box-shadow: 0 2px 10px color-mix(in srgb, var(--ink) 10%, transparent) }
+.ref.big { width: min(400px, calc(100% - 20px)) }
+.ref-head { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; font-size: 12px; color: var(--muted) }
+.ref-head b { color: var(--ink); font-weight: 600; font-size: 12.5px }
+.ref-head .x { margin-left: auto; border: 0; background: none; cursor: pointer; color: var(--muted); font-size: 15px; line-height: 1; padding: 2px 4px; border-radius: 5px }
+.ref-head .x:hover { background: color-mix(in srgb, var(--ink) 7%, transparent) }
+#refCv { display: block; width: 100%; aspect-ratio: 16 / 10; border-radius: 6px; background: var(--paper); border: 1px solid var(--line); cursor: zoom-in }
+.ref.big #refCv { cursor: zoom-out }
+.ref-row { display: flex; gap: 4px; align-items: center; margin-top: 6px }
+.ref-row button { border: 1px solid var(--line); background: var(--surface); border-radius: 7px; padding: 3px 8px; font-size: 12.5px; cursor: pointer; flex: none }
+.ref-row button:hover { border-color: var(--faint) }
+.ref-row label { font-size: 12px; color: var(--muted) }
+#refSeed { width: 0; flex: 1; min-width: 56px; font: 12.5px var(--mono); border: 1px solid var(--line); border-radius: 7px; padding: 3px 6px; background: var(--paper) }
+.ref-note { margin: 6px 0 0; font-size: 11.5px; color: var(--faint); line-height: 1.35 }
+.stage.has-ref .badge { max-width: calc(100% - 276px) }
+@media (max-width: 900px) {
+  .ref { width: 184px; padding: 6px }
+  .ref-note, .ref-row label { display: none }
+  .ref-row { gap: 3px }
+  .ref-row button { padding: 3px 6px }
+  #refSeed { min-width: 40px; padding: 3px 4px }
+  .stage.has-ref .badge { max-width: calc(100% - 206px) }
+}
+
 .layers { display: flex; flex-wrap: wrap; gap: 6px; align-items: center }
 .chip { border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: 3px 11px; font-size: 12.5px; cursor: pointer; color: var(--muted); display: inline-flex; gap: 6px; align-items: center }
 .chip[aria-pressed="true"] { color: var(--ink); border-color: var(--ink) }
@@ -167,6 +192,7 @@ h1 { font-size: 19px; line-height: 1.1; margin: 0; font-weight: 700; letter-spac
         <p>Отдельно оцениваются четыре вещи: сходятся ли рёбра каждого направления в одну точку схода; может ли настоящая камера дать такие точки схода (прямые углы, перпендикулярность горизонту, нет обратной перспективы); пропорции восстановленной коробки; насколько углы рисунка далеки от ближайшего правильного куба.</p></div>
       <div><h3>Как рисовать</h3>
         <p>Рёбра — прямыми штрихами, соединяй их в углах. Можно рисовать каждое ребро отдельно или обводить угол одним движением; можно продлевать линии за углы. Невидимые рёбра рисуй пером «Невидимое» или пунктиром. Для каждого направления нужно хотя бы 3 ребра, иначе сходимость не проверить.</p>
+        <p>Кнопка «Образец» показывает случайный куб (или коробку) для срисовки; номер seed задаёт образец, им можно делиться. Образец в проверке не участвует.</p>
         <p>На одном листе можно нарисовать несколько коробок: тогда проверяется ещё и то, что все они видны одним глазом. Бумажный рисунок можно положить подложкой и обвести.</p></div>
       <div><h3>Клавиши</h3>
         <p class="keys"><kbd>B</kbd> карандаш <kbd>L</kbd> прямая <kbd>D</kbd> невидимое ребро <kbd>E</kbd> ластик <kbd>Shift</kbd> прямая линия карандашом<br><kbd>⌘Z</kbd>/<kbd>Ctrl+Z</kbd> отменить, <kbd>⇧⌘Z</kbd>/<kbd>Ctrl+Y</kbd> вернуть<br><kbd>R</kbd> повернуть лист на 90° (<kbd>Shift+R</kbd> — в другую сторону)<br><kbd>Space</kbd> правильный куб <kbd>T</kbd> лучи к точкам схода <kbd>H</kbd> горизонт <kbd>F</kbd> вписать лист <kbd>V</kbd> показать точки схода<br>Колесо — масштаб, перетаскивание правой кнопкой или двумя пальцами — сдвиг.</p></div>
@@ -192,6 +218,7 @@ h1 { font-size: 19px; line-height: 1.1; margin: 0; font-weight: 700; letter-spac
           <button id="hintBtn" class="hint">Подсказка</button>
         </div>
         <div class="grp">
+          <button id="refToggle" aria-pressed="false" title="Показать образец для срисовки"><svg viewBox="0 0 20 20"><path d="M4 7l6-3 6 3v7l-6 3-6-3z M4 7l6 3 6-3 M10 10v7" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg><span>Образец</span></button>
           <label class="file" title="Положить фото бумажного рисунка под холст и обвести"><input type="file" id="underlayIn" accept="image/*"><span>Подложка</span></label>
           <input type="range" id="underlayA" min="0" max="1" step="0.05" value="0.5" aria-label="Прозрачность подложки" hidden>
         </div>
@@ -199,6 +226,17 @@ h1 { font-size: 19px; line-height: 1.1; margin: 0; font-weight: 700; letter-spac
       <div class="stage" id="stage">
         <canvas id="cv" aria-label="Лист для рисования"></canvas>
         <div class="badge" id="badge" hidden></div>
+        <section class="ref" id="ref" aria-label="Образец для срисовки" hidden>
+          <div class="ref-head"><b>Образец</b><span id="refKind">куб</span><button class="x" id="refClose" title="Скрыть образец" aria-label="Скрыть образец">×</button></div>
+          <canvas id="refCv" title="Нажми, чтобы увеличить"></canvas>
+          <div class="ref-row">
+            <button id="refPrev" title="Предыдущий" aria-label="Предыдущий образец">◀</button>
+            <label for="refSeed">seed</label><input id="refSeed" aria-label="seed образца" type="number" min="1" max="999999" step="1" inputmode="numeric">
+            <button id="refNext" title="Следующий" aria-label="Следующий образец">▶</button>
+            <button id="refRand" title="Случайный образец" aria-label="Случайный образец">🎲</button>
+          </div>
+          <p class="ref-note">Только для срисовки: проверяется твой рисунок, а не сходство с образцом.</p>
+        </section>
         <div class="zoom">
           <button id="rotSheet" title="Повернуть лист на 90° (R, Shift+R — обратно)" aria-label="Повернуть лист">↻ <span id="rotLabel"></span></button>
           <button id="fitPage" title="Вписать лист (F)">Лист</button>
@@ -5073,6 +5111,7 @@ h1 { font-size: 19px; line-height: 1.1; margin: 0; font-weight: 700; letter-spac
       layers: { fam: !0, rays: !0, horizon: !1, answer: !1, mine: !0 },
       view: { s: 1, ox: 0, oy: 0, a: 0 },
       rot: 0,
+      ref: { on: !1, seed: 1, big: !1 },
       result: null,
       stale: !1,
       sel: 0,
@@ -5097,6 +5136,7 @@ h1 { font-size: 19px; line-height: 1.1; margin: 0; font-weight: 700; letter-spac
           layers: M.layers,
           example: M.example,
           rot: M.rot,
+          ref: M.ref,
         }),
       );
     } catch {}
@@ -5111,6 +5151,7 @@ h1 { font-size: 19px; line-height: 1.1; margin: 0; font-weight: 700; letter-spac
           Object.assign(M.layers, t.layers || {}),
           (M.example = !!t.example),
           (M.rot = ((t.rot | 0) % 4 + 4) % 4),
+          t.ref && (M.ref = { on: !!t.ref.on, seed: refSeedOf(t.ref.seed), big: !!t.ref.big }),
           (M.view.a = (M.rot * Math.PI) / 2),
           !0
         );
@@ -5224,6 +5265,81 @@ h1 { font-size: 19px; line-height: 1.1; margin: 0; font-weight: 700; letter-spac
       }
     };
     rotAnim = requestAnimationFrame(step);
+  }
+  // ---------- Образец для срисовки ----------
+  // Случайный куб (или коробка в режиме «Коробка») по номеру seed. Только картинка:
+  // в анализе рисунка не участвует.
+  function refSeedOf(v) {
+    let n = Math.floor(Math.abs(+v));
+    return Number.isFinite(n) && n >= 1 ? Math.min(n, 999999) : 1;
+  }
+  var refCache = null;
+  function refBox() {
+    let key = M.ref.seed + ":" + M.target;
+    if (refCache && refCache.key === key) return refCache.B;
+    let B = null;
+    for (let k = 0; k < 50 && !B; k++) {
+      let r = re(M.ref.seed * 7349 + k * 104729 + 11),
+        D = [1, 1, 1];
+      if (M.target === "box") {
+        D = [0, 1, 2].map(() => Math.exp((r() - 0.5) * 1.3));
+        let g = Math.cbrt(D[0] * D[1] * D[2]);
+        D = D.map((x) => x / g);
+      }
+      B = ce(r, { page: F, D, maxCone: 28, minTilt: 0.18 });
+    }
+    return (refCache = { key, B }), B;
+  }
+  function drawRef() {
+    let box = D("ref");
+    if (box.hidden) return;
+    let cv = D("refCv"),
+      w = cv.clientWidth,
+      h = cv.clientHeight,
+      dpr = window.devicePixelRatio || 1;
+    if (!w || !h) return;
+    (cv.width = Math.round(w * dpr)), (cv.height = Math.round(h * dpr));
+    let g = cv.getContext("2d");
+    g.setTransform(dpr, 0, 0, dpr, 0, 0), g.clearRect(0, 0, w, h);
+    let B = refBox();
+    if (!B) return;
+    let xs = B.P.map((p) => p[0]),
+      ys = B.P.map((p) => p[1]),
+      x0 = Math.min(...xs),
+      y0 = Math.min(...ys),
+      bw = Math.max(...xs) - x0 || 1,
+      bh = Math.max(...ys) - y0 || 1,
+      pad = Math.max(10, 0.1 * Math.min(w, h)),
+      s = Math.min((w - 2 * pad) / bw, (h - 2 * pad) / bh),
+      ox = (w - s * bw) / 2 - s * x0,
+      oy = (h - s * bh) / 2 - s * y0,
+      P = B.P.map((p) => [ox + s * p[0], oy + s * p[1]]);
+    (g.lineCap = "round"), (g.lineJoin = "round");
+    for (let hidden of [!0, !1])
+      for (let e of Ne(B)) {
+        if (e.visible === hidden) continue;
+        (g.strokeStyle = hidden ? V.faint : V.ink),
+          (g.lineWidth = hidden ? 1 : M.ref.big ? 2 : 1.6),
+          g.setLineDash(hidden ? [4, 4] : []),
+          g.beginPath(),
+          g.moveTo(P[e.a][0], P[e.a][1]),
+          g.lineTo(P[e.b][0], P[e.b][1]),
+          g.stroke();
+      }
+    g.setLineDash([]);
+  }
+  function refSync() {
+    let box = D("ref");
+    (box.hidden = !M.ref.on),
+      box.classList.toggle("big", !!M.ref.big),
+      D("stage").classList.toggle("has-ref", !!M.ref.on),
+      D("refToggle").setAttribute("aria-pressed", !!M.ref.on),
+      document.activeElement !== D("refSeed") && (D("refSeed").value = M.ref.seed),
+      (D("refKind").textContent = M.target === "box" ? "\xB7 \u043A\u043E\u0440\u043E\u0431\u043A\u0430" : "\xB7 \u043A\u0443\u0431"),
+      drawRef();
+  }
+  function refSet(seed) {
+    (M.ref.seed = refSeedOf(seed)), qt(), refSync();
   }
   var ke = () => JSON.stringify(M.strokes);
   function Qt() {
@@ -5453,7 +5569,8 @@ h1 { font-size: 19px; line-height: 1.1; margin: 0; font-weight: 700; letter-spac
       (D("lAnswer").firstChild.textContent =
         t === "cube"
           ? "\u041F\u0440\u0430\u0432\u0438\u043B\u044C\u043D\u044B\u0439 \u043A\u0443\u0431 "
-          : "\u041F\u0440\u0430\u0432\u0438\u043B\u044C\u043D\u0430\u044F \u043A\u043E\u0440\u043E\u0431\u043A\u0430 ");
+          : "\u041F\u0440\u0430\u0432\u0438\u043B\u044C\u043D\u0430\u044F \u043A\u043E\u0440\u043E\u0431\u043A\u0430 "),
+      refSync();
   }
   function te() {
     for (let [t, e] of [
@@ -6331,6 +6448,21 @@ h1 { font-size: 19px; line-height: 1.1; margin: 0; font-weight: 700; letter-spac
     (t.hidden = !t.hidden), D("helpBtn").setAttribute("aria-expanded", !t.hidden), requestAnimationFrame(ye);
   };
   D("fitPage").onclick = we;
+  D("refToggle").onclick = () => ((M.ref.on = !M.ref.on), qt(), refSync());
+  D("refClose").onclick = () => ((M.ref.on = !1), qt(), refSync());
+  D("refPrev").onclick = () => refSet(M.ref.seed > 1 ? M.ref.seed - 1 : 999999);
+  D("refNext").onclick = () => refSet(M.ref.seed < 999999 ? M.ref.seed + 1 : 1);
+  D("refRand").onclick = () => refSet(1 + Math.floor(Math.random() * 999999));
+  D("refSeed").addEventListener("input", (e) => {
+    let v = e.target.value;
+    v !== "" && +v >= 1 && ((M.ref.seed = refSeedOf(v)), qt(), drawRef());
+  });
+  D("refSeed").addEventListener("change", () => refSync());
+  D("refSeed").addEventListener("keydown", (e) => {
+    e.key === "Enter" && (refSync(), e.target.blur());
+  });
+  D("refCv").onclick = () => ((M.ref.big = !M.ref.big), qt(), refSync());
+  new ResizeObserver(() => drawRef()).observe(D("refCv"));
   D("rotSheet").onclick = (e) => rotateSheet(e.shiftKey ? -1 : 1);
   D("fitVP").onclick = hn;
   for (let [t, e] of [
@@ -6355,14 +6487,16 @@ h1 { font-size: 19px; line-height: 1.1; margin: 0; font-weight: 700; letter-spac
   });
   new ResizeObserver(ye).observe(D("stage"));
   matchMedia("(prefers-color-scheme: dark)").addEventListener?.("change", () => {
-    ve(), O(), Lt();
+    ve(), O(), Lt(), drawRef();
   });
   new MutationObserver(() => {
     ve(), O();
+    drawRef();
   }).observe(document.documentElement, { attributes: !0, attributeFilter: ["data-theme"] });
   ve();
   var Qn = On();
   D("rotLabel").textContent = M.rot ? `${M.rot * 90}\xB0` : "";
+  refSync();
   Ot();
   te();
   St("pen");
@@ -6370,7 +6504,7 @@ h1 { font-size: 19px; line-height: 1.1; margin: 0; font-weight: 700; letter-spac
   Qn ? pt() : dn();
   Lt();
   ye();
-  window.perspectiveChecker = { state: M, toS: J };
+  window.perspectiveChecker = { state: M, toS: J, refBox };
 })();
 </script>
 

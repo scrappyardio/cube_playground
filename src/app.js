@@ -2437,6 +2437,7 @@
       layers: { fam: !0, rays: !0, horizon: !1, answer: !1, mine: !0 },
       view: { s: 1, ox: 0, oy: 0, a: 0 },
       rot: 0,
+      ref: { on: !1, seed: 1, big: !1 },
       result: null,
       stale: !1,
       sel: 0,
@@ -2461,6 +2462,7 @@
           layers: M.layers,
           example: M.example,
           rot: M.rot,
+          ref: M.ref,
         }),
       );
     } catch {}
@@ -2475,6 +2477,7 @@
           Object.assign(M.layers, t.layers || {}),
           (M.example = !!t.example),
           (M.rot = ((t.rot | 0) % 4 + 4) % 4),
+          t.ref && (M.ref = { on: !!t.ref.on, seed: refSeedOf(t.ref.seed), big: !!t.ref.big }),
           (M.view.a = (M.rot * Math.PI) / 2),
           !0
         );
@@ -2588,6 +2591,81 @@
       }
     };
     rotAnim = requestAnimationFrame(step);
+  }
+  // ---------- Образец для срисовки ----------
+  // Случайный куб (или коробка в режиме «Коробка») по номеру seed. Только картинка:
+  // в анализе рисунка не участвует.
+  function refSeedOf(v) {
+    let n = Math.floor(Math.abs(+v));
+    return Number.isFinite(n) && n >= 1 ? Math.min(n, 999999) : 1;
+  }
+  var refCache = null;
+  function refBox() {
+    let key = M.ref.seed + ":" + M.target;
+    if (refCache && refCache.key === key) return refCache.B;
+    let B = null;
+    for (let k = 0; k < 50 && !B; k++) {
+      let r = re(M.ref.seed * 7349 + k * 104729 + 11),
+        D = [1, 1, 1];
+      if (M.target === "box") {
+        D = [0, 1, 2].map(() => Math.exp((r() - 0.5) * 1.3));
+        let g = Math.cbrt(D[0] * D[1] * D[2]);
+        D = D.map((x) => x / g);
+      }
+      B = ce(r, { page: F, D, maxCone: 28, minTilt: 0.18 });
+    }
+    return (refCache = { key, B }), B;
+  }
+  function drawRef() {
+    let box = D("ref");
+    if (box.hidden) return;
+    let cv = D("refCv"),
+      w = cv.clientWidth,
+      h = cv.clientHeight,
+      dpr = window.devicePixelRatio || 1;
+    if (!w || !h) return;
+    (cv.width = Math.round(w * dpr)), (cv.height = Math.round(h * dpr));
+    let g = cv.getContext("2d");
+    g.setTransform(dpr, 0, 0, dpr, 0, 0), g.clearRect(0, 0, w, h);
+    let B = refBox();
+    if (!B) return;
+    let xs = B.P.map((p) => p[0]),
+      ys = B.P.map((p) => p[1]),
+      x0 = Math.min(...xs),
+      y0 = Math.min(...ys),
+      bw = Math.max(...xs) - x0 || 1,
+      bh = Math.max(...ys) - y0 || 1,
+      pad = Math.max(10, 0.1 * Math.min(w, h)),
+      s = Math.min((w - 2 * pad) / bw, (h - 2 * pad) / bh),
+      ox = (w - s * bw) / 2 - s * x0,
+      oy = (h - s * bh) / 2 - s * y0,
+      P = B.P.map((p) => [ox + s * p[0], oy + s * p[1]]);
+    (g.lineCap = "round"), (g.lineJoin = "round");
+    for (let hidden of [!0, !1])
+      for (let e of Ne(B)) {
+        if (e.visible === hidden) continue;
+        (g.strokeStyle = hidden ? V.faint : V.ink),
+          (g.lineWidth = hidden ? 1 : M.ref.big ? 2 : 1.6),
+          g.setLineDash(hidden ? [4, 4] : []),
+          g.beginPath(),
+          g.moveTo(P[e.a][0], P[e.a][1]),
+          g.lineTo(P[e.b][0], P[e.b][1]),
+          g.stroke();
+      }
+    g.setLineDash([]);
+  }
+  function refSync() {
+    let box = D("ref");
+    (box.hidden = !M.ref.on),
+      box.classList.toggle("big", !!M.ref.big),
+      D("stage").classList.toggle("has-ref", !!M.ref.on),
+      D("refToggle").setAttribute("aria-pressed", !!M.ref.on),
+      document.activeElement !== D("refSeed") && (D("refSeed").value = M.ref.seed),
+      (D("refKind").textContent = M.target === "box" ? "\xB7 \u043A\u043E\u0440\u043E\u0431\u043A\u0430" : "\xB7 \u043A\u0443\u0431"),
+      drawRef();
+  }
+  function refSet(seed) {
+    (M.ref.seed = refSeedOf(seed)), qt(), refSync();
   }
   var ke = () => JSON.stringify(M.strokes);
   function Qt() {
@@ -2817,7 +2895,8 @@
       (D("lAnswer").firstChild.textContent =
         t === "cube"
           ? "\u041F\u0440\u0430\u0432\u0438\u043B\u044C\u043D\u044B\u0439 \u043A\u0443\u0431 "
-          : "\u041F\u0440\u0430\u0432\u0438\u043B\u044C\u043D\u0430\u044F \u043A\u043E\u0440\u043E\u0431\u043A\u0430 ");
+          : "\u041F\u0440\u0430\u0432\u0438\u043B\u044C\u043D\u0430\u044F \u043A\u043E\u0440\u043E\u0431\u043A\u0430 "),
+      refSync();
   }
   function te() {
     for (let [t, e] of [
@@ -3695,6 +3774,21 @@
     (t.hidden = !t.hidden), D("helpBtn").setAttribute("aria-expanded", !t.hidden), requestAnimationFrame(ye);
   };
   D("fitPage").onclick = we;
+  D("refToggle").onclick = () => ((M.ref.on = !M.ref.on), qt(), refSync());
+  D("refClose").onclick = () => ((M.ref.on = !1), qt(), refSync());
+  D("refPrev").onclick = () => refSet(M.ref.seed > 1 ? M.ref.seed - 1 : 999999);
+  D("refNext").onclick = () => refSet(M.ref.seed < 999999 ? M.ref.seed + 1 : 1);
+  D("refRand").onclick = () => refSet(1 + Math.floor(Math.random() * 999999));
+  D("refSeed").addEventListener("input", (e) => {
+    let v = e.target.value;
+    v !== "" && +v >= 1 && ((M.ref.seed = refSeedOf(v)), qt(), drawRef());
+  });
+  D("refSeed").addEventListener("change", () => refSync());
+  D("refSeed").addEventListener("keydown", (e) => {
+    e.key === "Enter" && (refSync(), e.target.blur());
+  });
+  D("refCv").onclick = () => ((M.ref.big = !M.ref.big), qt(), refSync());
+  new ResizeObserver(() => drawRef()).observe(D("refCv"));
   D("rotSheet").onclick = (e) => rotateSheet(e.shiftKey ? -1 : 1);
   D("fitVP").onclick = hn;
   for (let [t, e] of [
@@ -3719,14 +3813,16 @@
   });
   new ResizeObserver(ye).observe(D("stage"));
   matchMedia("(prefers-color-scheme: dark)").addEventListener?.("change", () => {
-    ve(), O(), Lt();
+    ve(), O(), Lt(), drawRef();
   });
   new MutationObserver(() => {
     ve(), O();
+    drawRef();
   }).observe(document.documentElement, { attributes: !0, attributeFilter: ["data-theme"] });
   ve();
   var Qn = On();
   D("rotLabel").textContent = M.rot ? `${M.rot * 90}\xB0` : "";
+  refSync();
   Ot();
   te();
   St("pen");
@@ -3734,5 +3830,5 @@
   Qn ? pt() : dn();
   Lt();
   ye();
-  window.perspectiveChecker = { state: M, toS: J };
+  window.perspectiveChecker = { state: M, toS: J, refBox };
 })();

@@ -24,8 +24,12 @@ async function openPage(browser, { noWorker = false, viewport = { width: 1400, h
   page.on("console", (m) => m.type() === "error" && !/fonts\.(googleapis|gstatic)/.test(m.text()) && errors.push("console: " + m.text()));
   page.on("requestfailed", () => {}); // шрифты офлайн не грузятся — это нормально
   if (noWorker) await page.addInitScript(() => { delete window.Worker; });
-  if (storage !== undefined) await page.addInitScript((s) => { try { localStorage.clear(); s && localStorage.setItem("perspective-checker.v1", s); } catch {} }, storage);
   await page.goto(url);
+  // стартовое состояние записываем один раз и перезагружаем страницу
+  if (storage !== undefined) {
+    await page.evaluate((s) => { localStorage.clear(); s && localStorage.setItem("perspective-checker.v1", s); }, storage);
+    await page.reload();
+  }
   await page.waitForFunction(() => window.perspectiveChecker);
   return { ctx, page, errors };
 }
@@ -170,6 +174,53 @@ try {
   ok(errors.length === 0, "ошибок в консоли нет" + (errors.length ? ": " + errors.join(" | ") : ""));
   await ctx.close();
 
+  // 9в. Образец для срисовки: не влияет на проверку
+  console.log("Образец для срисовки");
+  ({ ctx, page, errors } = await openPage(browser, { storage: JSON.stringify({ free: c.strokes.map((s) => ({ pts: s.pts, hidden: !!s.hidden })), target: "cube", layers: {} }) }));
+  await waitAnalysis(page);
+  const res0 = await page.evaluate(() => { window.__res0 = window.perspectiveChecker.state.result; return window.perspectiveChecker.state.result.boxes[0].diag.score.total; });
+  ok(await page.locator("#ref").isHidden(), "образец по умолчанию скрыт");
+  await page.click("#refToggle");
+  ok(await page.locator("#ref").isVisible(), "кнопка «Образец» показывает окошко");
+  await page.fill("#refSeed", "42");
+  await page.locator("#refSeed").press("Enter");
+  const P42 = await page.evaluate(() => JSON.stringify(window.perspectiveChecker.refBox().P));
+  const ink = await page.evaluate(() => { const cv = document.getElementById("refCv"), d = cv.getContext("2d").getImageData(0, 0, cv.width, cv.height).data; let n = 0; for (let i = 3; i < d.length; i += 4) d[i] > 0 && n++; return n; });
+  ok(ink > 300, `образец нарисован (${ink} пикс.)`);
+  await page.click("#refNext");
+  ok((await page.inputValue("#refSeed")) === "43", "▶ даёт следующий seed");
+  const P43 = await page.evaluate(() => JSON.stringify(window.perspectiveChecker.refBox().P));
+  ok(P43 !== P42, "другой seed — другой куб");
+  await page.click("#refPrev");
+  ok((await page.evaluate(() => JSON.stringify(window.perspectiveChecker.refBox().P))) === P42, "тот же seed — тот же куб");
+  await page.click("#refRand");
+  ok(+(await page.inputValue("#refSeed")) >= 1, "🎲 даёт случайный seed");
+  await page.fill("#refSeed", "42");
+  await page.locator("#refSeed").press("Enter");
+  await page.locator("#refSeed").focus();
+  await page.keyboard.type("r");
+  ok((await page.evaluate(() => window.perspectiveChecker.state.rot)) === 0, "буквы в поле seed не поворачивают лист");
+  await page.click("#refCv");
+  ok(await page.locator("#ref.big").isVisible(), "щелчок по образцу увеличивает его");
+  await page.waitForTimeout(300);
+  ok(await page.evaluate(() => window.perspectiveChecker.state.result === window.__res0 && !window.perspectiveChecker.state.busy), "смена образца не запускает и не меняет проверку");
+  ok((await page.evaluate(() => window.perspectiveChecker.state.result.boxes[0].diag.score.total)) === res0, "оценка рисунка та же");
+  await page.click("#tBox");
+  await waitAnalysis(page);
+  ok(/коробка/.test(await page.locator("#refKind").textContent()), "в режиме «Коробка» образец — коробка");
+  const Pbox = await page.evaluate(() => window.perspectiveChecker.refBox().D.map((x) => +x.toFixed(3)));
+  ok(Pbox.some((x) => Math.abs(x - 1) > 0.05), "у образца-коробки не кубические пропорции: " + Pbox.join(", "));
+  await page.click("#tCube");
+  await waitAnalysis(page);
+  if (shots) await page.screenshot({ path: path.join(shots, "6-reference.png") });
+  await page.reload();
+  await page.waitForFunction(() => window.perspectiveChecker);
+  const afterReload = await page.evaluate(() => [JSON.stringify(window.perspectiveChecker.state.ref), localStorage.getItem("perspective-checker.v1")?.slice(-120)]);
+  ok((await page.locator("#ref").isVisible()) && (await page.inputValue("#refSeed")) === "42", "образец и seed сохраняются после перезагрузки " + afterReload.join(" | "));
+  ok((await page.evaluate(() => JSON.stringify(window.perspectiveChecker.refBox().P))) === P42, "после перезагрузки тот же куб");
+  ok(errors.length === 0, "ошибок в консоли нет" + (errors.length ? ": " + errors.join(" | ") : ""));
+  await ctx.close();
+
   // 10. Без Web Worker анализ идёт в основном потоке тем же кодом
   console.log("Запасной режим без Worker");
   ({ ctx, page, errors } = await openPage(browser, { noWorker: true, storage: "" }));
@@ -184,6 +235,10 @@ try {
   ({ ctx, page, errors } = await openPage(browser, { viewport: { width: 390, height: 844 }, storage: "" }));
   const sw = await page.evaluate(() => document.documentElement.scrollWidth);
   ok(sw <= 390, `нет горизонтальной прокрутки (ширина ${sw})`);
+  await page.click("#refToggle");
+  const sw2 = await page.evaluate(() => document.documentElement.scrollWidth);
+  ok(sw2 <= 390 && (await page.locator("#ref").isVisible()), `образец на телефоне без прокрутки вбок (ширина ${sw2})`);
+  if (shots) await page.screenshot({ path: path.join(shots, "7-phone-ref.png") });
   await page.click("#mFace");
   await page.waitForTimeout(300);
   await page.keyboard.press("r");
