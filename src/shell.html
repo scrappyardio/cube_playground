@@ -78,6 +78,9 @@ h1 { font-size: 19px; line-height: 1.1; margin: 0; font-weight: 700; letter-spac
 .primary { border: 1px solid var(--answer); background: var(--answer); color: #fff; padding: 6px 13px; border-radius: 8px; cursor: pointer; font-size: 13px; font-weight: 600 }
 .primary:disabled { background: var(--surface); color: var(--faint); border-color: var(--line); cursor: default }
 .jnote { font-size: 12.5px; color: var(--muted) }
+.toggle { border: 1px solid var(--line); background: var(--surface); padding: 6px 12px; border-radius: 8px; cursor: pointer; font-size: 13px; color: var(--ink) }
+.toggle[aria-pressed="true"] { border-color: var(--answer); color: var(--answer); background: color-mix(in srgb, var(--answer) 10%, var(--surface)); font-weight: 600 }
+.toggle:disabled { opacity: .4; cursor: default }
 .jdlg { width: min(1040px, calc(100vw - 24px)); max-height: calc(100vh - 32px); border: 1px solid var(--line); border-radius: 14px; background: var(--desk); color: var(--ink); padding: 0 }
 .jdlg::backdrop { background: color-mix(in srgb, #000 38%, transparent) }
 .jhead { display: flex; align-items: center; gap: 12px; padding: 14px 18px 8px; position: sticky; top: 0; background: var(--desk); z-index: 1 }
@@ -242,7 +245,7 @@ h1 { font-size: 19px; line-height: 1.1; margin: 0; font-weight: 700; letter-spac
       <div><h3>Как нарисовать пропорциональный куб</h3>
         <p>1. Начни с ближнего угла и трёх рёбер из него — буквы «Y». Все три угла между ними больше 90°. Дальше каждое ребро веди к той же точке схода, что и параллельное ему.</p>
         <p>2. Чем круче ребро уходит от тебя вглубь, тем короче оно на рисунке. Но при обычном взгляде грань-квадрат сжимается не в разы: если одна сторона грани вдвое длиннее другой, скорее всего, ошибка.</p>
-        <p>3. Проверь слоем «Мерка пропорций» (<kbd>G</kbd>). От твоего ближнего угла по твоим же направлениям строится настоящий куб; зелёные отметки показывают, где должны кончаться рёбра, стрелки — куда сдвинуть дальние углы. В отчёте «Пропорции» видно, какая грань вытянута.</p>
+        <p>3. Нажми «Проверить пропорции» над отчётом: на трёх рёбрах от ближнего угла появятся отметки, где они должны кончаться, с процентом расхождения. Слой «Мерка пропорций» (<kbd>G</kbd>) показывает такие отметки сам, когда пропорции заметно не кубические. От твоего ближнего угла по твоим же направлениям строится настоящий куб; зелёные отметки показывают, где должны кончаться рёбра, стрелки — куда сдвинуть дальние углы. В отчёте «Пропорции» видно, какая грань вытянута.</p>
         <p>4. Хочешь тренироваться — включи «Образец» и срисовывай.</p></div>
       <div><h3>Клавиши</h3>
         <p class="keys"><kbd>B</kbd> карандаш <kbd>L</kbd> прямая <kbd>D</kbd> невидимое ребро <kbd>E</kbd> ластик <kbd>Shift</kbd> прямая линия карандашом<br><kbd>⌘Z</kbd>/<kbd>Ctrl+Z</kbd> отменить, <kbd>⇧⌘Z</kbd>/<kbd>Ctrl+Y</kbd> вернуть<br><kbd>R</kbd> повернуть лист на 90° (<kbd>Shift+R</kbd> — в другую сторону)<br><kbd>G</kbd> мерка пропорций <kbd>Space</kbd> правильный куб <kbd>T</kbd> лучи к точкам схода <kbd>H</kbd> горизонт <kbd>F</kbd> вписать лист <kbd>V</kbd> показать точки схода<br>Колесо — масштаб, перетаскивание правой кнопкой или двумя пальцами — сдвиг.</p></div>
@@ -307,6 +310,8 @@ h1 { font-size: 19px; line-height: 1.1; margin: 0; font-weight: 700; letter-spac
     <aside class="report" id="report">
       <div class="ractions">
         <button id="saveJ" class="primary" disabled title="Сохранить рисунок, миниатюру и баллы в журнал">В журнал</button>
+        <button id="propBtn" class="toggle" aria-pressed="false" title="Отметки на трёх рёбрах от ближнего угла: где должны кончаться рёбра куба">Проверить пропорции</button>
+        <button id="ansBtn" class="toggle" aria-pressed="false" title="Показать правильный куб, ближайший к рисунку (Space)">Правильный куб</button>
         <button id="recalc" class="ghost" title="Забыть прошлый разбор и разобрать рисунок заново, перебирая больше вариантов">Пересчитать с нуля</button>
         <span class="jnote" id="jNote" role="status"></span>
       </div>

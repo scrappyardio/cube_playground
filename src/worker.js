@@ -1485,7 +1485,9 @@
     }
     // Мерка пропорций: настоящий куб с тем же ближним углом, теми же направлениями рёбер и той же
     // камерой, что у восстановленной коробки. Его углы — куда должны приходить рёбра рисунка.
-    M && M.D && M.X && (i.guide = propGuide(t, M, i.nearLabel, E));
+    // если рисунок объясняется кубом, мерка строится от правильного куба (того же, что слой «Правильный куб»)
+    let GM = i.props && i.props.cubeOk && r.cube && r.cube.X ? { ...r.cube, D: [1, 1, 1] } : M;
+    GM && GM.D && GM.X && (i.guide = propGuide(t, GM, i.nearLabel, E));
     // показываем мерку, только когда пропорции действительно не кубические
     i.guide &&
       (i.guide.edges.forEach((q) => q.off && Math.abs(Math.log(i.guide.fam[q.k])) < 0.06 && (q.off = !1)),
@@ -1762,9 +1764,15 @@
           q = P[l2],
           dir = [q[0] - A[0], q[1] - A[1]],
           L = Math.hypot(...dir) || 1;
-        if (!o) return { k: j, l: l2, q, have: !1 };
-        let cur = ((o.p[0] - A[0]) * dir[0] + (o.p[1] - A[1]) * dir[1]) / L;
-        return { k: j, l: l2, q, end: o.p, ratio: cur / L, have: !0, off: Math.abs(cur - L) > tol && Math.abs(cur / L - 1) > 0.06 };
+        // конец ребра: дальний угол, а если он не собран — дальний конец нарисованной линии этого ребра
+        let endP = o ? o.p : null;
+        if (!endP) {
+          let ln = (t.obsL || []).find((q) => (q.la === n0 && q.lb === l2) || (q.la === l2 && q.lb === n0));
+          ln && (endP = Math.hypot(ln.a[0] - A[0], ln.a[1] - A[1]) > Math.hypot(ln.b[0] - A[0], ln.b[1] - A[1]) ? ln.a : ln.b);
+        }
+        if (!endP) return { k: j, l: l2, q, have: !1 };
+        let cur = ((endP[0] - A[0]) * dir[0] + (endP[1] - A[1]) * dir[1]) / L;
+        return { k: j, l: l2, q, end: endP, ratio: cur / L, pct: Math.round((cur / L - 1) * 100), have: !0, off: Math.abs(cur - L) > tol && Math.abs(cur / L - 1) > 0.06 };
       });
     return { near: n0, P, fam, ref, corners, edges: near, tol, any: corners.some((c) => c.off) };
   }
@@ -1794,7 +1802,8 @@
         r.push({
           key: "props",
           name: "\u041F\u0440\u043E\u043F\u043E\u0440\u0446\u0438\u0438 \u043A\u0443\u0431\u0430",
-          val: t.props.cubeOk ? Mt(t.props.gap, 0.012, 0.06) : Mt(t.props.excess, 0.04, 0.45),
+          // рисунок объясняется кубом — пропорции верные: 90–100 по тому, насколько куб хуже коробки
+          val: t.props.cubeOk ? Mt(t.props.gap, 0, 0.25) : Mt(t.props.excess, 0.04, 0.45),
           w: 0.2,
         }),
       t.answer &&

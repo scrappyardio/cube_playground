@@ -248,6 +248,17 @@ try {
   await waitAnalysis(page);
   ok(!(await page.evaluate(() => window.perspectiveChecker.state.result.boxes[0].diag.guide.show)), "у правильного куба мерка ничего не показывает");
   ok(/одной длины/.test(await page.locator(".fix").innerText()), "в отчёте: все направления одной длины");
+  // кнопка «Проверить пропорции»: отметки на рёбрах даже у правильного куба
+  const gpx = async () => page.evaluate(() => { const cv = document.getElementById("cv"), d = cv.getContext("2d").getImageData(0, 0, cv.width, cv.height).data; let n = 0; for (let i = 0; i < d.length; i += 4) d[i + 1] > d[i] + 40 && d[i + 1] > d[i + 2] + 10 && n++; return n; });
+  const greenBefore = await gpx();
+  await page.click("#propBtn");
+  await page.waitForTimeout(150);
+  const marks = await page.evaluate(() => window.perspectiveChecker.state.result.boxes[0].diag.guide.edges.filter((e) => e.have).length);
+  ok((await page.locator("#propBtn").getAttribute("aria-pressed")) === "true" && (await gpx()) > greenBefore + 50 && marks === 3, `«Проверить пропорции» показывает отметки на трёх рёбрах (${marks})`);
+  await page.click("#ansBtn");
+  ok((await page.evaluate(() => window.perspectiveChecker.state.layers.answer)) && (await page.locator("#lAnswer").getAttribute("aria-pressed")) === "true", "«Правильный куб» — отдельная кнопка, связана со слоем");
+  await page.click("#tBox");
+  ok(await page.locator("#propBtn").isDisabled(), "в режиме «Коробка» проверка пропорций недоступна");
   await ctx.close();
 
   // 9д. Режим «по грани»: пока куб не дорисован, оценки нет (раньше было 100 за каждую линию)

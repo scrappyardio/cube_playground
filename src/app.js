@@ -2434,7 +2434,7 @@
       tool: "pen",
       strokes: [],
       store: { free: [], face: [] },
-      layers: { fam: !0, rays: !0, horizon: !1, answer: !1, mine: !0, guide: !0 },
+      layers: { fam: !0, rays: !0, horizon: !1, answer: !1, mine: !0, guide: !0, pcheck: !1 },
       view: { s: 1, ox: 0, oy: 0, a: 0 },
       rot: 0,
       ref: { on: !1, seed: 1, big: !1 },
@@ -3167,6 +3167,13 @@
   }
   function Ot() {
     let t = M.mode === "face" ? "cube" : M.target;
+    (D("propBtn").disabled = M.mode === "face" || M.target !== "cube"),
+      (D("propBtn").title =
+        M.mode === "face"
+          ? "В задании «по грани» проверяется совпадение с ответом"
+          : M.target !== "cube"
+            ? "У коробки пропорции могут быть любыми"
+            : "Отметки на трёх рёбрах от ближнего угла: где должны кончаться рёбра куба");
     D("tCube").setAttribute("aria-pressed", t === "cube"),
       D("tBox").setAttribute("aria-pressed", t === "box"),
       (D("lAnswer").firstChild.textContent =
@@ -3183,6 +3190,8 @@
       ["answer", "lAnswer"],
       ["mine", "lMine"],
       ["guide", "lGuide"],
+      ["pcheck", "propBtn"],
+      ["answer", "ansBtn"],
     ])
       D(e).setAttribute("aria-pressed", !!M.layers[t]);
   }
@@ -3711,7 +3720,7 @@
         A.globalAlpha = 1;
       }
     }
-    M.layers.guide && n && f && !M.stale && M.mode === "free" && M.target === "cube" && drawGuide(f.diag.guide);
+    (M.layers.guide || M.layers.pcheck) && n && f && !M.stale && M.mode === "free" && M.target === "cube" && drawGuide(f.diag.guide, M.layers.pcheck);
     if (
       (n &&
         M.layers.mine &&
@@ -3797,8 +3806,9 @@
     A.moveTo(b[0], b[1]), A.lineTo(b[0] - u[0] * h - u[1] * h * 0.5, b[1] - u[1] * h + u[0] * h * 0.5);
     A.lineTo(b[0] - u[0] * h + u[1] * h * 0.5, b[1] - u[1] * h - u[0] * h * 0.5), A.closePath(), A.fill();
   }
-  function drawGuide(g) {
-    if (!g || !g.show) return;
+  // detail — кнопка «Проверить пропорции»: отметки на всех трёх рёбрах от ближнего угла, даже если всё верно.
+  function drawGuide(g, detail) {
+    if (!g || !(detail || g.show)) return;
     let col = V.answer,
       ends = new Set(g.edges.filter((e) => e.off).map((e) => e.l));
     A.globalAlpha = 0.32;
@@ -3807,26 +3817,37 @@
     let N0 = J(g.P[g.near]);
     (A.strokeStyle = col), (A.lineWidth = 2), A.beginPath(), A.arc(N0[0], N0[1], 8, 0, 7), A.stroke();
     wt(N0, "от этого угла", col, { dx: 12, dy: 20, size: 11 });
+    let shown = 0;
     for (let e of g.edges) {
-      if (!e.have || !e.off) continue;
+      if (!e.have || (!detail && !e.off)) continue;
+      shown++;
       let Q = J(e.q),
         E = J(e.end),
         d = [Q[0] - N0[0], Q[1] - N0[1]],
         L = Math.hypot(...d) || 1,
         nrm = [-d[1] / L, d[0] / L],
-        long = e.ratio > 1;
-      long ||
+        long = e.ratio > 1,
+        pct = e.pct ?? Math.round((e.ratio - 1) * 100),
+        tcol = e.off ? col : V.fam[e.k];
+      e.off &&
+        !long &&
         ((A.strokeStyle = col), (A.lineWidth = 2.4), A.setLineDash([6, 5]), A.beginPath(), A.moveTo(E[0], E[1]), A.lineTo(Q[0], Q[1]), A.stroke(), A.setLineDash([]));
-      (A.strokeStyle = col), (A.lineWidth = 3), A.beginPath();
+      (A.strokeStyle = tcol), (A.lineWidth = e.off ? 3 : 2.2), A.beginPath();
       A.moveTo(Q[0] - nrm[0] * 11, Q[1] - nrm[1] * 11), A.lineTo(Q[0] + nrm[0] * 11, Q[1] + nrm[1] * 11), A.stroke();
-      wt([Q[0] + nrm[0] * 18, Q[1] + nrm[1] * 18 + 4], long ? "укороти до сюда" : "продли до сюда", col, { center: !0, size: 11.5 });
+      wt(
+        [Q[0] + nrm[0] * 18, Q[1] + nrm[1] * 18 + 4],
+        e.off ? (long ? `укороти на ${pct}% — до сюда` : `продли на ${-pct}% — до сюда`) : `✓ ${sn[e.k]}: верно (${pct > 0 ? "+" : pct < 0 ? "−" : "±"}${Math.abs(pct)}%)`,
+        e.off ? col : V.fam[e.k],
+        { center: !0, size: 11.5 },
+      );
     }
     for (let c of g.corners) {
-      if (!c.off || ends.has(c.l)) continue;
+      if (!c.off || ends.has(c.l) || !(detail || g.show)) continue;
       let a = J(c.p),
         b = J(c.q);
       arrowTo(a, b, col), (A.lineWidth = 1.6), A.beginPath(), A.arc(b[0], b[1], 5, 0, 7), A.stroke();
     }
+    detail && !shown && wt([N0[0], N0[1]], "рёбра от этого угла не найдены — дорисуй их", V.sev[2], { dx: 12, dy: 38, size: 11 });
   }
   function Jn() {
     let t = M.face,
@@ -3973,7 +3994,12 @@
                     return `<li><span class="sw" style="background:var(--fam${k})"></span><span>${Yn(sn[k])} рёбра ${f > 1 ? "длиннее" : "короче"} нужного в ${Et(f > 1 ? f : 1 / f, 2)} раза — ${f > 1 ? "укороти" : "продли"} их до зелёных отметок на холсте${M.layers.guide ? "" : " (включи «Мерку пропорций», G)"}.</span></li>`;
                   })
                   .join("")
-              : '<li><span class="ok">✓</span><span>Все три направления одной длины — как у куба.</span></li>'
+              : (() => {
+                  let pv = s.score && s.score.parts.find((q) => q.key === "props");
+                  return pv && pv.val < 90
+                    ? `<li><span class="ok" style="color:var(--sev1)">≈</span><span>Расхождение небольшое: самое заметное — ${sn[[0, 1, 2].sort((x, z) => Math.abs(Math.log(r[z])) - Math.abs(Math.log(r[x])))[0]]} рёбра (${Math.round(Math.max(...r.map((x) => Math.abs(x - 1))) * 100)}%). Нажми «Проверить пропорции» — на рёбрах появятся отметки.</span></li>`
+                    : '<li><span class="ok">✓</span><span>Все три направления одной длины — как у куба.</span></li>';
+                })()
           }</ul>`
         : "";
     return `<div class="card"><h2>Пропорции ${cube ? "куба" : "коробки"}</h2><div class="faces">${faces}</div>${fix}<p class="small">Три видимые грани восстановленной коробки, развёрнутые к тебе.${cube ? " Пунктир — квадрат, каким грань была бы у куба. Длина сравнивается с направлением, которое ближе всего к среднему." : ""}${s.props.determined ? "" : " По этому рисунку пропорции определяются неточно."}</p></div>`;
@@ -4191,6 +4217,8 @@
     ["answer", "lAnswer"],
     ["mine", "lMine"],
     ["guide", "lGuide"],
+    ["pcheck", "propBtn"],
+    ["answer", "ansBtn"],
   ])
     D(e).onclick = () => $t(t);
   D("underlayIn").addEventListener("change", (t) => {
