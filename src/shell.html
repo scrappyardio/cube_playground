@@ -1,0 +1,224 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Перспектива: проверка рисунка</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>/* Layout: a drawing desk — the sheet on the left fills the screen, the critique sits in a column on the right
+   (below the sheet on a phone). Colour: graphite on cool paper; the three edge directions own the only strong hues. */
+:root {
+  --desk: #E4E7EB; --paper: #FCFCFD; --surface: #FFFFFF; --ink: #1D2026; --muted: #5B636E; --faint: #98A0AA; --line: #D3D8DE;
+  --fam0: #DD5F27; --fam1: #2C68D6; --fam2: #BF3A8C; --answer: #0F8F66; --warn: #C2410C; --bad: #B42318; --horizon: #A86F12;
+  --sev3: #B42318; --sev2: #C2410C; --sev1: #A86F12; --sev0: #5B636E;
+  --font: "Onest", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --r: 10px;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --desk: #121417; --paper: #1C1F23; --surface: #191C20; --ink: #E7E9EC; --muted: #A2A9B3; --faint: #6A717B; --line: #30353B;
+  --fam0: #F2884F; --fam1: #6F9BFF; --fam2: #E66BB4; --answer: #3BC793; --warn: #F2905C; --bad: #FF7A6B; --horizon: #E3AE48;
+  --sev3: #FF7A6B; --sev2: #F2905C; --sev1: #E3AE48; --sev0: #A2A9B3; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --desk: #121417; --paper: #1C1F23; --surface: #191C20; --ink: #E7E9EC; --muted: #A2A9B3; --faint: #6A717B; --line: #30353B;
+  --fam0: #F2884F; --fam1: #6F9BFF; --fam2: #E66BB4; --answer: #3BC793; --warn: #F2905C; --bad: #FF7A6B; --horizon: #E3AE48;
+  --sev3: #FF7A6B; --sev2: #F2905C; --sev1: #E3AE48; --sev0: #A2A9B3; color-scheme: dark }
+
+* { box-sizing: border-box }
+[hidden] { display: none !important }
+html, body { height: 100% }
+body { margin: 0; background: var(--desk); color: var(--ink); font: 14px/1.5 var(--font); -webkit-font-smoothing: antialiased }
+button, input { font: inherit; color: inherit }
+kbd { font: 600 10.5px var(--mono); color: var(--muted); border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4px; padding: 0 4px; background: var(--surface) }
+:focus-visible { outline: 2px solid var(--fam1); outline-offset: 2px }
+
+.app { height: 100%; display: flex; flex-direction: column; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 12px }
+.top { display: flex; align-items: center; gap: 12px 18px; flex-wrap: wrap; padding-bottom: 10px }
+.brand { display: flex; align-items: center; gap: 10px }
+.logo { width: 30px; height: 30px; color: var(--ink) }
+h1 { font-size: 19px; line-height: 1.1; margin: 0; font-weight: 700; letter-spacing: -0.01em }
+.tag { margin: 1px 0 0; color: var(--muted); font-size: 12.5px }
+.spacer { flex: 1 }
+.seg { display: inline-flex; background: var(--surface); border: 1px solid var(--line); border-radius: 9px; padding: 2px }
+.seg button { border: 0; background: none; padding: 5px 11px; border-radius: 7px; cursor: pointer; font-size: 13px; color: var(--muted) }
+.seg button[aria-pressed="true"] { background: var(--ink); color: var(--paper) }
+.ghost { border: 1px solid var(--line); background: var(--surface); padding: 5px 11px; border-radius: 8px; cursor: pointer; font-size: 13px }
+.ghost:hover, .seg button:hover { border-color: var(--faint) }
+
+.help { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 14px 18px; margin-bottom: 10px }
+.helpcols { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 18px }
+.help h3 { margin: 0 0 4px; font-size: 13.5px }
+.help p { margin: 0 0 8px; color: var(--muted); font-size: 13px; max-width: 62ch }
+.help .keys { line-height: 2 }
+
+.work { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 14px }
+.stagewrap { display: flex; flex-direction: column; gap: 8px; min-width: 0; min-height: 0 }
+.toolbar { display: flex; flex-wrap: wrap; gap: 8px }
+.grp { display: flex; gap: 3px; background: var(--surface); border: 1px solid var(--line); border-radius: 9px; padding: 3px; align-items: center }
+.grp button, .file { border: 0; background: none; border-radius: 6px; padding: 5px 9px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--ink) }
+.grp button:hover:not(:disabled), .file:hover { background: color-mix(in srgb, var(--ink) 7%, transparent) }
+.grp button[aria-pressed="true"] { background: var(--ink); color: var(--paper) }
+.grp button:disabled { opacity: .35; cursor: default }
+.grp svg { width: 17px; height: 17px; flex: none }
+.grp .icon { padding: 5px 7px }
+.grp .hint { color: var(--horizon) }
+.file input { position: absolute; width: 1px; height: 1px; opacity: 0 }
+.file { position: relative }
+#underlayA { width: 90px; accent-color: var(--ink) }
+
+.stage { position: relative; flex: 1; min-height: 320px; border-radius: var(--r); overflow: hidden; background: var(--desk); border: 1px solid var(--line) }
+#cv { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; cursor: crosshair; display: block }
+.badge { position: absolute; left: 12px; top: 12px; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; font-size: 12.5px; color: var(--muted); max-width: min(520px, calc(100% - 24px)); pointer-events: none }
+.badge b { color: var(--ink); font-weight: 600 }
+.zoom { position: absolute; right: 10px; bottom: 10px; display: flex; gap: 4px }
+.zoom button { border: 1px solid var(--line); background: var(--surface); border-radius: 7px; padding: 4px 9px; font-size: 12px; cursor: pointer }
+
+.layers { display: flex; flex-wrap: wrap; gap: 6px; align-items: center }
+.chip { border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: 3px 11px; font-size: 12.5px; cursor: pointer; color: var(--muted); display: inline-flex; gap: 6px; align-items: center }
+.chip[aria-pressed="true"] { color: var(--ink); border-color: var(--ink) }
+.chip.answer[aria-pressed="true"] { color: var(--answer); border-color: var(--answer) }
+.chip kbd { font-size: 9.5px }
+.status { margin-left: auto; font: 12px var(--mono); color: var(--faint) }
+
+/* ---------- report ---------- */
+.report { min-height: 0; overflow: auto; display: flex; flex-direction: column; gap: 12px; padding-bottom: 8px }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 14px 16px }
+.card h2 { font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin: 0 0 10px; font-weight: 600 }
+.scorecard { display: grid; grid-template-columns: 92px 1fr; gap: 14px; align-items: center }
+.ring { width: 92px; height: 92px }
+.ring text { font: 700 26px var(--mono); fill: var(--ink) }
+.grade { font-size: 18px; font-weight: 700; margin: 0 0 6px; text-wrap: balance }
+.parts { display: grid; gap: 5px }
+.part { display: grid; grid-template-columns: 1fr 34px; gap: 2px 8px; font-size: 12px; color: var(--muted); align-items: center }
+.part .bar { grid-column: 1 / -1; height: 4px; border-radius: 2px; background: color-mix(in srgb, var(--ink) 9%, transparent); overflow: hidden }
+.part .bar i { display: block; height: 100%; border-radius: 2px }
+.part b { font: 600 12px var(--mono); color: var(--ink); text-align: right; font-variant-numeric: tabular-nums }
+.boxtabs { display: flex; gap: 6px; flex-wrap: wrap }
+.boxtabs button { border: 1px solid var(--line); background: var(--surface); border-radius: 8px; padding: 4px 10px; font-size: 12.5px; cursor: pointer }
+.boxtabs button[aria-pressed="true"] { border-color: var(--ink); font-weight: 600 }
+.boxtabs .odd { color: var(--sev2) }
+
+.issues { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px }
+.issue { border-left: 3px solid var(--sev0); padding: 6px 10px 7px; border-radius: 0 8px 8px 0; background: color-mix(in srgb, var(--ink) 3%, transparent); cursor: default }
+.issue[data-sev="3"] { border-color: var(--sev3) } .issue[data-sev="2"] { border-color: var(--sev2) } .issue[data-sev="1"] { border-color: var(--sev1) }
+.issue:hover, .issue.on { background: color-mix(in srgb, var(--ink) 7%, transparent) }
+.issue h3 { font-size: 13.5px; margin: 0 0 2px; font-weight: 600; text-wrap: balance }
+.issue p { margin: 0; font-size: 12.8px; color: var(--muted) }
+.sevtag { margin-right: 6px; font: 600 10px var(--mono); text-transform: uppercase; letter-spacing: .05em; color: var(--sev0); flex: none }
+.issue[data-sev="3"] .sevtag { color: var(--sev3) } .issue[data-sev="2"] .sevtag { color: var(--sev2) } .issue[data-sev="1"] .sevtag { color: var(--sev1) }
+.good { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 4px; font-size: 12.8px; color: var(--muted) }
+.good li::before { content: "✓"; color: var(--answer); font-weight: 700; margin-right: 6px }
+.good li.info::before { content: "i"; color: var(--faint); font: 600 11px var(--mono) }
+
+.fams { width: 100%; border-collapse: collapse; font-size: 12.5px }
+.fams td, .fams th { padding: 5px 4px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top }
+.fams th { font-weight: 500; color: var(--faint); font-size: 11.5px }
+.fams tr:last-child td { border-bottom: 0 }
+.fams .num { font: 12px var(--mono); text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap }
+.sw { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; vertical-align: -1px }
+.st-ok { color: var(--answer) } .st-bad { color: var(--sev2) } .st-few { color: var(--faint) }
+.facts { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; font-size: 12.8px; margin: 0 }
+.facts dt { color: var(--faint) }
+.facts dd { margin: 0; color: var(--ink) }
+.facts .mono { font-family: var(--mono); font-size: 12.5px }
+.props { display: grid; gap: 6px; margin-top: 10px }
+.prop { display: grid; grid-template-columns: 82px 1fr 44px; gap: 8px; align-items: center; font-size: 12px; color: var(--muted) }
+.prop .track { position: relative; height: 8px; background: color-mix(in srgb, var(--ink) 7%, transparent); border-radius: 4px }
+.prop .track::after { content: ""; position: absolute; left: 50%; top: -3px; bottom: -3px; width: 1px; background: var(--faint) }
+.prop .track i { position: absolute; top: 0; bottom: 0; border-radius: 4px }
+.prop b { font: 600 12px var(--mono); text-align: right; color: var(--ink) }
+.empty h2 { text-transform: none; letter-spacing: 0; font-size: 16px; color: var(--ink) }
+.empty p, .empty li { color: var(--muted); font-size: 13px }
+.empty ol { padding-left: 18px; margin: 6px 0 0 }
+.small { font-size: 12px; color: var(--faint); margin: 8px 0 0 }
+
+@media (max-width: 900px) {
+  .app { height: auto; min-height: 100% }
+  .work { grid-template-columns: minmax(0, 1fr) }
+  .stage { flex: none; height: 62vh; min-height: 340px }
+  .report { overflow: visible }
+  .grp button span { display: none }
+  .status { margin-left: 0; width: 100% }
+}
+@media (prefers-reduced-motion: no-preference) { .part .bar i { transition: width .35s ease } }
+</style>
+<div class="app" id="app">
+  <header class="top">
+    <div class="brand">
+      <svg class="logo" viewBox="0 0 32 32" aria-hidden="true"><path d="M4 26 L16 6 L28 26" fill="none" stroke="currentColor" stroke-width="2"/><path d="M9 26 L16 14 L23 26 M4 26 H28" fill="none" stroke="currentColor" stroke-width="1.4" opacity=".55"/><circle cx="16" cy="6" r="2.4" fill="var(--fam1)"/></svg>
+      <div><h1>Перспектива</h1><p class="tag">проверка нарисованных кубов и коробок</p></div>
+    </div>
+    <div class="seg" role="group" aria-label="Задание">
+      <button id="mFree" aria-pressed="true">Свободный рисунок</button>
+      <button id="mFace" aria-pressed="false">Достроить по грани</button>
+    </div>
+    <div class="seg" role="group" aria-label="Что рисую">
+      <button id="tCube" aria-pressed="true" title="Все рёбра равны: проверка пропорций включена">Куб</button>
+      <button id="tBox" aria-pressed="false" title="Любые пропорции: проверяется только перспектива">Коробка</button>
+    </div>
+    <div class="spacer"></div>
+    <button id="exampleBtn" class="ghost" title="Загрузить пример рисунка с ошибками">Пример</button>
+    <button id="helpBtn" class="ghost" aria-expanded="false">Как это работает</button>
+  </header>
+
+  <section class="help" id="help" hidden>
+    <div class="helpcols">
+      <div><h3>Что проверяется</h3>
+        <p>Рисунок читается как настоящая коробка, которую видит настоящий глаз. Приложение находит углы и рёбра, раскладывает рёбра по трём направлениям и подбирает трёхмерную коробку и камеру, которые дают ближайшую картинку.</p>
+        <p>Отдельно оцениваются четыре вещи: сходятся ли рёбра каждого направления в одну точку схода; может ли настоящая камера дать такие точки схода (прямые углы, перпендикулярность горизонту, нет обратной перспективы); пропорции восстановленной коробки; насколько углы рисунка далеки от ближайшего правильного куба.</p></div>
+      <div><h3>Как рисовать</h3>
+        <p>Рёбра — прямыми штрихами, соединяй их в углах. Можно рисовать каждое ребро отдельно или обводить угол одним движением; можно продлевать линии за углы. Невидимые рёбра рисуй пером «Невидимое» или пунктиром. Для каждого направления нужно хотя бы 3 ребра, иначе сходимость не проверить.</p>
+        <p>На одном листе можно нарисовать несколько коробок: тогда проверяется ещё и то, что все они видны одним глазом. Бумажный рисунок можно положить подложкой и обвести.</p></div>
+      <div><h3>Клавиши</h3>
+        <p class="keys"><kbd>B</kbd> карандаш <kbd>L</kbd> прямая <kbd>D</kbd> невидимое ребро <kbd>E</kbd> ластик <kbd>Shift</kbd> прямая линия карандашом<br><kbd>⌘Z</kbd>/<kbd>Ctrl+Z</kbd> отменить, <kbd>⇧⌘Z</kbd>/<kbd>Ctrl+Y</kbd> вернуть<br><kbd>R</kbd> повернуть лист на 90° (<kbd>Shift+R</kbd> — в другую сторону)<br><kbd>Space</kbd> правильный куб <kbd>T</kbd> лучи к точкам схода <kbd>H</kbd> горизонт <kbd>F</kbd> вписать лист <kbd>V</kbd> показать точки схода<br>Колесо — масштаб, перетаскивание правой кнопкой или двумя пальцами — сдвиг.</p></div>
+    </div>
+  </section>
+
+  <main class="work">
+    <section class="stagewrap">
+      <div class="toolbar" role="toolbar" aria-label="Инструменты">
+        <div class="grp">
+          <button id="toolPen" class="tool" aria-pressed="true" title="Карандаш (B)"><svg viewBox="0 0 20 20"><path d="M3 17l2.5-.6L16 5.9 14.1 4 3.6 14.5z M12.8 5.3l1.9 1.9" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg><span>Карандаш</span></button>
+          <button id="toolLine" class="tool" aria-pressed="false" title="Прямая (L)"><svg viewBox="0 0 20 20"><path d="M3 16L17 4" stroke="currentColor" stroke-width="1.6"/><circle cx="3" cy="16" r="1.6" fill="currentColor"/><circle cx="17" cy="4" r="1.6" fill="currentColor"/></svg><span>Прямая</span></button>
+          <button id="toolHidden" class="tool" aria-pressed="false" title="Невидимое ребро (D)"><svg viewBox="0 0 20 20"><path d="M3 16L17 4" stroke="currentColor" stroke-width="1.6" stroke-dasharray="3 2.4"/></svg><span>Невидимое</span></button>
+          <button id="toolEraser" class="tool" aria-pressed="false" title="Ластик (E)"><svg viewBox="0 0 20 20"><path d="M7.5 16.5h9M4 12.6l6.8-6.8a1.5 1.5 0 012.1 0l2.3 2.3a1.5 1.5 0 010 2.1l-5.9 5.9H7.2z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg><span>Ластик</span></button>
+        </div>
+        <div class="grp">
+          <button id="undo" class="icon" title="Отменить (⌘Z)" disabled><svg viewBox="0 0 20 20"><path d="M7 5L3 9l4 4M3.5 9H12a5 5 0 010 10h-2" fill="none" stroke="currentColor" stroke-width="1.6"/></svg></button>
+          <button id="redo" class="icon" title="Вернуть (⇧⌘Z)" disabled><svg viewBox="0 0 20 20"><path d="M13 5l4 4-4 4M16.5 9H8a5 5 0 000 10h2" fill="none" stroke="currentColor" stroke-width="1.6"/></svg></button>
+          <button id="clear" class="icon" title="Стереть всё"><svg viewBox="0 0 20 20"><path d="M4 6h12M8 6V4h4v2M6 6l1 11h6l1-11" fill="none" stroke="currentColor" stroke-width="1.5"/></svg></button>
+        </div>
+        <div class="grp face-only" hidden>
+          <button id="newFace">Новая грань</button>
+          <button id="hintBtn" class="hint">Подсказка</button>
+        </div>
+        <div class="grp">
+          <label class="file" title="Положить фото бумажного рисунка под холст и обвести"><input type="file" id="underlayIn" accept="image/*"><span>Подложка</span></label>
+          <input type="range" id="underlayA" min="0" max="1" step="0.05" value="0.5" aria-label="Прозрачность подложки" hidden>
+        </div>
+      </div>
+      <div class="stage" id="stage">
+        <canvas id="cv" aria-label="Лист для рисования"></canvas>
+        <div class="badge" id="badge" hidden></div>
+        <div class="zoom">
+          <button id="rotSheet" title="Повернуть лист на 90° (R, Shift+R — обратно)" aria-label="Повернуть лист">↻ <span id="rotLabel"></span></button>
+          <button id="fitPage" title="Вписать лист (F)">Лист</button>
+          <button id="fitVP" title="Показать точки схода (V)">Точки схода</button>
+        </div>
+      </div>
+      <div class="layers" role="group" aria-label="Слои">
+        <button id="lFam" class="chip" aria-pressed="true">Направления рёбер</button>
+        <button id="lRays" class="chip" aria-pressed="true">Лучи к точкам схода <kbd>T</kbd></button>
+        <button id="lHorizon" class="chip" aria-pressed="false">Горизонт и центр взгляда <kbd>H</kbd></button>
+        <button id="lAnswer" class="chip answer" aria-pressed="false">Правильный куб <kbd>Space</kbd></button>
+        <button id="lMine" class="chip" aria-pressed="true">Мой рисунок</button>
+        <span class="status" id="status" role="status"></span>
+      </div>
+    </section>
+
+    <aside class="report" id="report" aria-live="polite"></aside>
+  </main>
+</div>
+<!--WORKER-->
+<!--APP-->
+
+</body></html>

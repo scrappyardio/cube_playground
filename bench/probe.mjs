@@ -1,0 +1,12 @@
+import { loadAnalyzer, loadSynth } from "./lib.mjs";
+const an = loadAnalyzer(), S = loadSynth();
+const rng = S.re(7);
+const B = S.ce(rng, {});
+const E = S.Ne(B);
+const d = S._e(B.P, E, rng, {});
+const r = an(d.strokes.map(s=>({pts:s.pts,hidden:!!s.hidden})), { target: "cube", page: { w: 1600, h: 1000 } });
+console.log(Object.keys(r), r.boxes.length, r.ms);
+const b = r.boxes[0];
+console.log(Object.keys(b));
+console.log(Object.keys(b.diag));
+console.log(JSON.stringify(b.diag.score), JSON.stringify(b.diag.issues.map(i=>[i.sev,i.kind,i.title])));
