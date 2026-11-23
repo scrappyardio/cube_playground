@@ -2434,7 +2434,7 @@
       tool: "pen",
       strokes: [],
       store: { free: [], face: [] },
-      layers: { fam: !0, rays: !0, horizon: !1, answer: !1, mine: !0 },
+      layers: { fam: !0, rays: !0, horizon: !1, answer: !1, mine: !0, guide: !0 },
       view: { s: 1, ox: 0, oy: 0, a: 0 },
       rot: 0,
       ref: { on: !1, seed: 1, big: !1 },
@@ -2905,6 +2905,7 @@
       ["horizon", "lHorizon"],
       ["answer", "lAnswer"],
       ["mine", "lMine"],
+      ["guide", "lGuide"],
     ])
       D(e).setAttribute("aria-pressed", !!M.layers[t]);
   }
@@ -3121,6 +3122,8 @@
         ? rotateSheet(t.shiftKey ? -1 : 1)
         : n === "t" || n === "\u0435"
           ? $t("rays")
+        : n === "g" || n === "\u043F"
+          ? $t("guide")
         : n === "h" || n === "\u0440"
           ? $t("horizon")
           : n === "c" || n === "\u0441"
@@ -3430,6 +3433,7 @@
         A.globalAlpha = 1;
       }
     }
+    M.layers.guide && n && f && !M.stale && M.mode === "free" && M.target === "cube" && drawGuide(f.diag.guide);
     if (
       (n &&
         M.layers.mine &&
@@ -3502,6 +3506,49 @@
       A.stroke(),
       A.setLineDash([])),
       Hn();
+  }
+  // Слой «Мерка пропорций»: настоящий куб от ближнего угла рисунка (те же направления и взгляд).
+  function arrowTo(a, b, col) {
+    let d = [b[0] - a[0], b[1] - a[1]],
+      L = Math.hypot(...d);
+    if (L < 4) return;
+    let u = [d[0] / L, d[1] / L],
+      h = Math.min(10, L * 0.4);
+    (A.strokeStyle = col), (A.lineWidth = 1.6), A.setLineDash([5, 4]), A.beginPath(), A.moveTo(a[0], a[1]);
+    A.lineTo(b[0] - u[0] * h * 0.6, b[1] - u[1] * h * 0.6), A.stroke(), A.setLineDash([]), (A.fillStyle = col), A.beginPath();
+    A.moveTo(b[0], b[1]), A.lineTo(b[0] - u[0] * h - u[1] * h * 0.5, b[1] - u[1] * h + u[0] * h * 0.5);
+    A.lineTo(b[0] - u[0] * h + u[1] * h * 0.5, b[1] - u[1] * h - u[0] * h * 0.5), A.closePath(), A.fill();
+  }
+  function drawGuide(g) {
+    if (!g || !g.show) return;
+    let col = V.answer,
+      ends = new Set(g.edges.filter((e) => e.off).map((e) => e.l));
+    A.globalAlpha = 0.32;
+    for (let [a, b] of ct) (A.strokeStyle = col), (A.lineWidth = 1.2), A.setLineDash([3, 4]), lt(g.P[a], g.P[b]);
+    A.setLineDash([]), (A.globalAlpha = 1);
+    let N0 = J(g.P[g.near]);
+    (A.strokeStyle = col), (A.lineWidth = 2), A.beginPath(), A.arc(N0[0], N0[1], 8, 0, 7), A.stroke();
+    wt(N0, "от этого угла", col, { dx: 12, dy: 20, size: 11 });
+    for (let e of g.edges) {
+      if (!e.have || !e.off) continue;
+      let Q = J(e.q),
+        E = J(e.end),
+        d = [Q[0] - N0[0], Q[1] - N0[1]],
+        L = Math.hypot(...d) || 1,
+        nrm = [-d[1] / L, d[0] / L],
+        long = e.ratio > 1;
+      long ||
+        ((A.strokeStyle = col), (A.lineWidth = 2.4), A.setLineDash([6, 5]), A.beginPath(), A.moveTo(E[0], E[1]), A.lineTo(Q[0], Q[1]), A.stroke(), A.setLineDash([]));
+      (A.strokeStyle = col), (A.lineWidth = 3), A.beginPath();
+      A.moveTo(Q[0] - nrm[0] * 11, Q[1] - nrm[1] * 11), A.lineTo(Q[0] + nrm[0] * 11, Q[1] + nrm[1] * 11), A.stroke();
+      wt([Q[0] + nrm[0] * 18, Q[1] + nrm[1] * 18 + 4], long ? "укороти до сюда" : "продли до сюда", col, { center: !0, size: 11.5 });
+    }
+    for (let c of g.corners) {
+      if (!c.off || ends.has(c.l)) continue;
+      let a = J(c.p),
+        b = J(c.q);
+      arrowTo(a, b, col), (A.lineWidth = 1.6), A.beginPath(), A.arc(b[0], b[1], 5, 0, 7), A.stroke();
+    }
   }
   function Jn() {
     let t = M.face,
@@ -3603,6 +3650,43 @@
               ? "\u043F\u043E\u0440\u0442\u0440\u0435\u0442\u043D\u044B\u0439"
               : "\u0442\u0435\u043B\u0435\u0432\u0438\u043A, \u043F\u043E\u0447\u0442\u0438 \u0431\u0435\u0437 \u043F\u0435\u0440\u0441\u043F\u0435\u043A\u0442\u0438\u0432\u044B";
   }
+  // Карточка «Пропорции»: грани восстановленной коробки, развёрнутые к зрителю, поверх квадрата.
+  function faceSvg(i, j, a, b, cube, off) {
+    let u = 70 / Math.max(a, b, cube ? 1 : 0),
+      w = a * u,
+      h = b * u,
+      x = (100 - Math.max(w, cube ? u : 0)) / 2,
+      y = 82 - h,
+      sq = cube ? `<rect x="${x}" y="${82 - u}" width="${u}" height="${u}" fill="none" stroke="var(--faint)" stroke-width="1.2" stroke-dasharray="3 3"/>` : "",
+      ln = (x1, y1, x2, y2, k) => `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="var(--fam${k})" stroke-width="3" stroke-linecap="round"/>`;
+    return `<div class="face${off ? " off" : ""}"><svg viewBox="0 0 100 88" aria-hidden="true"><rect x="${x}" y="${y}" width="${w}" height="${h}" fill="color-mix(in srgb, var(--ink) 4%, transparent)"/>${sq}${ln(x, y, x + w, y, i)}${ln(x, y + h, x + w, y + h, i)}${ln(x, y, x, y + h, j)}${ln(x + w, y, x + w, y + h, j)}</svg><b>1 : ${Et(b / a, 2)}</b><span><span class="sw" style="background:var(--fam${i})"></span>× <span class="sw" style="background:var(--fam${j})"></span></span></div>`;
+  }
+  function propsCard(s) {
+    let cube = M.target === "cube" && M.mode === "free",
+      g = s.guide,
+      r = cube && g ? g.fam : s.props.r,
+      wrong = cube && g && g.show ? [0, 1, 2].filter((k) => Math.abs(Math.log(r[k])) > 0.06) : [],
+      faces = [
+        [0, 1],
+        [0, 2],
+        [1, 2],
+      ]
+        .map(([i, j]) => faceSvg(i, j, r[i], r[j], cube, wrong.includes(i) || wrong.includes(j)))
+        .join(""),
+      fix = cube
+        ? `<ul class="fix">${
+            wrong.length
+              ? wrong
+                  .map((k) => {
+                    let f = r[k];
+                    return `<li><span class="sw" style="background:var(--fam${k})"></span><span>${Yn(sn[k])} рёбра ${f > 1 ? "длиннее" : "короче"} нужного в ${Et(f > 1 ? f : 1 / f, 2)} раза — ${f > 1 ? "укороти" : "продли"} их до зелёных отметок на холсте${M.layers.guide ? "" : " (включи «Мерку пропорций», G)"}.</span></li>`;
+                  })
+                  .join("")
+              : '<li><span class="ok">✓</span><span>Все три направления одной длины — как у куба.</span></li>'
+          }</ul>`
+        : "";
+    return `<div class="card"><h2>Пропорции ${cube ? "куба" : "коробки"}</h2><div class="faces">${faces}</div>${fix}<p class="small">Три видимые грани восстановленной коробки, развёрнутые к тебе.${cube ? " Пунктир — квадрат, каким грань была бы у куба. Длина сравнивается с направлением, которое ближе всего к среднему." : ""}${s.props.determined ? "" : " По этому рисунку пропорции определяются неточно."}</p></div>`;
+  }
   function Lt() {
     let t = D("report"),
       e = M.result;
@@ -3699,15 +3783,7 @@
       ${s.camera && s.camera.impossible ? '<dt>\u041A\u0430\u043C\u0435\u0440\u0430</dt><dd style="color:var(--sev3)">\u0442\u0430\u043A\u0438\u0435 \u0442\u043E\u0447\u043A\u0438 \u0441\u0445\u043E\u0434\u0430 \u043D\u0435\u0432\u043E\u0437\u043C\u043E\u0436\u043D\u044B</dd>' : ""}</dl>
       <p class="small">\u0414\u043B\u0438\u043D\u0430 \u043E\u0431\u044A\u0435\u043A\u0442\u0438\u0432\u0430 \u043F\u043E\u0441\u0447\u0438\u0442\u0430\u043D\u0430 \u0434\u043B\u044F \u043B\u0438\u0441\u0442\u0430 \u043A\u0430\u043A \u043A\u0430\u0434\u0440\u0430 36\xD724 \u043C\u043C. \u0427\u0435\u043C \u043A\u043E\u0440\u043E\u0447\u0435 \u043E\u0431\u044A\u0435\u043A\u0442\u0438\u0432, \u0442\u0435\u043C \u0441\u0438\u043B\u044C\u043D\u0435\u0435 \u0441\u0445\u043E\u0434\u044F\u0442\u0441\u044F \u0440\u0451\u0431\u0440\u0430.</p></div>`;
     }
-    s.props &&
-      (o += `<div class="card"><h2>\u041F\u0440\u043E\u043F\u043E\u0440\u0446\u0438\u0438 \u0432\u043E\u0441\u0441\u0442\u0430\u043D\u043E\u0432\u043B\u0435\u043D\u043D\u043E\u0439 \u043A\u043E\u0440\u043E\u0431\u043A\u0438</h2><div class="props">${s.props.r
-        .map((h, u) => {
-          let x = Math.log(h),
-            b = Math.min(50, (Math.abs(x) / Math.log(1.6)) * 50);
-          return `<div class="prop"><span><span class="sw" style="background:var(--fam${u})"></span>${sn[u]}</span><span class="track"><i style="background:var(--fam${u});${x >= 0 ? `left:50%;width:${b}%` : `right:50%;width:${b}%`}"></i></span><b>\xD7${Et(h, 2)}</b></div>`;
-        })
-        .join("")}</div>
-      <p class="small">\u0414\u043B\u0438\u043D\u0430 \u0440\u0451\u0431\u0435\u0440 \u043A\u0430\u0436\u0434\u043E\u0433\u043E \u043D\u0430\u043F\u0440\u0430\u0432\u043B\u0435\u043D\u0438\u044F \u0443 \u043D\u0430\u0441\u0442\u043E\u044F\u0449\u0435\u0439 \u043A\u043E\u0440\u043E\u0431\u043A\u0438, \u043A\u043E\u0442\u043E\u0440\u0430\u044F \u043F\u043E\u043B\u0443\u0447\u0430\u0435\u0442\u0441\u044F \u0438\u0437 \u0440\u0438\u0441\u0443\u043D\u043A\u0430, \u043E\u0442\u043D\u043E\u0441\u0438\u0442\u0435\u043B\u044C\u043D\u043E \u0441\u0440\u0435\u0434\u043D\u0435\u0439. \u0423 \u043A\u0443\u0431\u0430 \u0432\u0441\u0435 \xD71,00.${s.props.determined ? "" : " \u041F\u043E \u044D\u0442\u043E\u043C\u0443 \u0440\u0438\u0441\u0443\u043D\u043A\u0443 \u043F\u0440\u043E\u043F\u043E\u0440\u0446\u0438\u0438 \u043E\u043F\u0440\u0435\u0434\u0435\u043B\u044F\u044E\u0442\u0441\u044F \u043D\u0435\u0442\u043E\u0447\u043D\u043E."}</p></div>`),
+    s.props && (o += propsCard(s)),
       (t.innerHTML = o),
       t.querySelectorAll(".boxtabs button").forEach((h) =>
         h.addEventListener("click", () => {
@@ -3797,6 +3873,7 @@
     ["horizon", "lHorizon"],
     ["answer", "lAnswer"],
     ["mine", "lMine"],
+    ["guide", "lGuide"],
   ])
     D(e).onclick = () => $t(t);
   D("underlayIn").addEventListener("change", (t) => {

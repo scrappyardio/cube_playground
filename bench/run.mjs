@@ -29,6 +29,8 @@ function evalCase(an, name, seed) {
     out.fitErr = Math.max(...P.map((p) => Math.min(...fit.P.map((q) => Math.hypot(p[0] - q[0], p[1] - q[1]))))) / size;
   }
   out.famCounts = dg.families.map((f) => f.n);
+  const g = dg.guide;
+  out.guide = g ? { show: !!(g.show && (g.edges.some((e) => e.off) || g.corners.some((c) => c.off))), off: g.edges.filter((e) => e.off).map((e) => +g.fam[e.k].toFixed(2)) } : null;
   const E = dg.scale || 1;
   out.st = {
     corner: dg.answer ? Math.max(0, ...dg.answer.corners.map((q) => q.d)) / E : null,
@@ -86,6 +88,13 @@ if (isMainThread) {
     tot.crash += crash; tot.nobox += v.length - got.length - crash;
     if (bad) { tot.nBad += v.length; tot.miss += v.length - okN; } else { tot.nOk += v.length; tot.fp += v.length - okN; }
   }
+  // Мерка пропорций: на правильных кубах не должна появляться, при вытянутом кубе (×1,45)
+  // должна указать ровно одно направление — то, которое вытянуто.
+  const okCubes = results.filter((r) => !r.bad && SCENARIOS[r.name].target === "cube" && r.guide);
+  const props = results.filter((r) => r.name === "bad_props" && r.guide);
+  if (okCubes.length || props.length)
+    console.log(`\nМерка пропорций: показана на правильных кубах ${okCubes.filter((r) => r.guide.show).length}/${okCubes.length}, ` +
+      `при вытянутом кубе указано ровно вытянутое направление ${props.filter((r) => r.guide.show && r.guide.off.length === 1 && r.guide.off[0] > 1.2).length}/${props.length}`);
   console.log(`\nИТОГО: ложные тревоги ${tot.fp}/${tot.nOk}, пропущенные ошибки ${tot.miss}/${tot.nBad}, крахи ${tot.crash}, не нашёл коробку ${tot.nobox}`);
 } else {
   const an = loadAnalyzer();

@@ -151,6 +151,14 @@ h1 { font-size: 19px; line-height: 1.1; margin: 0; font-weight: 700; letter-spac
 .prop .track::after { content: ""; position: absolute; left: 50%; top: -3px; bottom: -3px; width: 1px; background: var(--faint) }
 .prop .track i { position: absolute; top: 0; bottom: 0; border-radius: 4px }
 .prop b { font: 600 12px var(--mono); text-align: right; color: var(--ink) }
+.faces { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 4px 0 2px }
+.face { text-align: center; font-size: 11.5px; color: var(--muted); min-width: 0 }
+.face svg { display: block; width: 100%; height: 92px }
+.face b { display: block; font: 600 12px var(--mono); color: var(--ink) }
+.face.off b { color: var(--sev2) }
+.fix { margin: 8px 0 0; padding: 0; list-style: none; display: grid; gap: 5px; font-size: 12.8px }
+.fix li { display: flex; gap: 6px; align-items: baseline }
+.fix .ok { color: var(--answer) }
 .empty h2 { text-transform: none; letter-spacing: 0; font-size: 16px; color: var(--ink) }
 .empty p, .empty li { color: var(--muted); font-size: 13px }
 .empty ol { padding-left: 18px; margin: 6px 0 0 }
@@ -194,8 +202,13 @@ h1 { font-size: 19px; line-height: 1.1; margin: 0; font-weight: 700; letter-spac
         <p>Рёбра — прямыми штрихами, соединяй их в углах. Можно рисовать каждое ребро отдельно или обводить угол одним движением; можно продлевать линии за углы. Невидимые рёбра рисуй пером «Невидимое» или пунктиром. Для каждого направления нужно хотя бы 3 ребра, иначе сходимость не проверить.</p>
         <p>Кнопка «Образец» показывает случайный куб (или коробку) для срисовки; номер seed задаёт образец, им можно делиться. Образец в проверке не участвует.</p>
         <p>На одном листе можно нарисовать несколько коробок: тогда проверяется ещё и то, что все они видны одним глазом. Бумажный рисунок можно положить подложкой и обвести.</p></div>
+      <div><h3>Как нарисовать пропорциональный куб</h3>
+        <p>1. Начни с ближнего угла и трёх рёбер из него — буквы «Y». Все три угла между ними больше 90°. Дальше каждое ребро веди к той же точке схода, что и параллельное ему.</p>
+        <p>2. Чем круче ребро уходит от тебя вглубь, тем короче оно на рисунке. Но при обычном взгляде грань-квадрат сжимается не в разы: если одна сторона грани вдвое длиннее другой, скорее всего, ошибка.</p>
+        <p>3. Проверь слоем «Мерка пропорций» (<kbd>G</kbd>). От твоего ближнего угла по твоим же направлениям строится настоящий куб; зелёные отметки показывают, где должны кончаться рёбра, стрелки — куда сдвинуть дальние углы. В отчёте «Пропорции» видно, какая грань вытянута.</p>
+        <p>4. Хочешь тренироваться — включи «Образец» и срисовывай.</p></div>
       <div><h3>Клавиши</h3>
-        <p class="keys"><kbd>B</kbd> карандаш <kbd>L</kbd> прямая <kbd>D</kbd> невидимое ребро <kbd>E</kbd> ластик <kbd>Shift</kbd> прямая линия карандашом<br><kbd>⌘Z</kbd>/<kbd>Ctrl+Z</kbd> отменить, <kbd>⇧⌘Z</kbd>/<kbd>Ctrl+Y</kbd> вернуть<br><kbd>R</kbd> повернуть лист на 90° (<kbd>Shift+R</kbd> — в другую сторону)<br><kbd>Space</kbd> правильный куб <kbd>T</kbd> лучи к точкам схода <kbd>H</kbd> горизонт <kbd>F</kbd> вписать лист <kbd>V</kbd> показать точки схода<br>Колесо — масштаб, перетаскивание правой кнопкой или двумя пальцами — сдвиг.</p></div>
+        <p class="keys"><kbd>B</kbd> карандаш <kbd>L</kbd> прямая <kbd>D</kbd> невидимое ребро <kbd>E</kbd> ластик <kbd>Shift</kbd> прямая линия карандашом<br><kbd>⌘Z</kbd>/<kbd>Ctrl+Z</kbd> отменить, <kbd>⇧⌘Z</kbd>/<kbd>Ctrl+Y</kbd> вернуть<br><kbd>R</kbd> повернуть лист на 90° (<kbd>Shift+R</kbd> — в другую сторону)<br><kbd>G</kbd> мерка пропорций <kbd>Space</kbd> правильный куб <kbd>T</kbd> лучи к точкам схода <kbd>H</kbd> горизонт <kbd>F</kbd> вписать лист <kbd>V</kbd> показать точки схода<br>Колесо — масштаб, перетаскивание правой кнопкой или двумя пальцами — сдвиг.</p></div>
     </div>
   </section>
 
@@ -247,6 +260,7 @@ h1 { font-size: 19px; line-height: 1.1; margin: 0; font-weight: 700; letter-spac
         <button id="lFam" class="chip" aria-pressed="true">Направления рёбер</button>
         <button id="lRays" class="chip" aria-pressed="true">Лучи к точкам схода <kbd>T</kbd></button>
         <button id="lHorizon" class="chip" aria-pressed="false">Горизонт и центр взгляда <kbd>H</kbd></button>
+        <button id="lGuide" class="chip answer" aria-pressed="true" title="Зелёные отметки: где должны кончаться рёбра, чтобы получился куб">Мерка пропорций <kbd>G</kbd></button>
         <button id="lAnswer" class="chip answer" aria-pressed="false">Правильный куб <kbd>Space</kbd></button>
         <button id="lMine" class="chip" aria-pressed="true">Мой рисунок</button>
         <span class="status" id="status" role="status"></span>

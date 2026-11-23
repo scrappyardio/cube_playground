@@ -1474,6 +1474,14 @@
         (i.props.spread = Math.max(...M.D) / Math.min(...M.D)),
         (i.props.excess = Math.max(0, ...x.map((I) => Math.abs(I.lr) - 1.5 * I.s)));
     }
+    // Мерка пропорций: настоящий куб с тем же ближним углом, теми же направлениями рёбер и той же
+    // камерой, что у восстановленной коробки. Его углы — куда должны приходить рёбра рисунка.
+    M && M.D && M.X && (i.guide = propGuide(t, M, i.nearLabel, E));
+    // показываем мерку, только когда пропорции действительно не кубические
+    i.guide &&
+      (i.guide.edges.forEach((q) => q.off && Math.abs(Math.log(i.guide.fam[q.k])) < 0.06 && (q.off = !1)),
+      // а исправлять есть что только на самих рёбрах из ближнего угла
+      (i.guide.show = m === "cube" && !!i.props && i.props.excess > 0.07 && i.guide.edges.some((q) => q.off)));
     let g = i.nearLabel;
     if (t.vOfLabel[g] >= 0 && [0, 1, 2].every((c) => t.vOfLabel[g ^ lt[c]] >= 0) && t.obs.vis.length >= 3) {
       let c = t.obsV.find((I) => I.l === g).p,
@@ -1585,17 +1593,19 @@
       }),
       m === "cube" && i.props && i.props.excess > 0.07)
     ) {
-      let c = i.props.worst,
-        f = i.props.r[c];
+      let gd = i.guide,
+        c = gd ? [0, 1, 2].sort((x, z) => Math.abs(Math.log(gd.fam[z])) - Math.abs(Math.log(gd.fam[x])))[0] : i.props.worst,
+        f = gd ? gd.fam[c] : i.props.r[c],
+        others = [0, 1, 2].filter((x) => x !== c),
+        pct = Math.round(Math.abs(f - 1) * 100);
       k.push({
         sev: i.props.excess > 0.2 ? 2 : 1,
         kind: "props",
         fams: [c],
-        title:
-          f > 1
-            ? `${D(B[c])} \u0440\u0451\u0431\u0440\u0430 \u0441\u043B\u0438\u0448\u043A\u043E\u043C \u0434\u043B\u0438\u043D\u043D\u044B\u0435 \u0434\u043B\u044F \u043A\u0443\u0431\u0430`
-            : `${D(B[c])} \u0440\u0451\u0431\u0440\u0430 \u0441\u043B\u0438\u0448\u043A\u043E\u043C \u043A\u043E\u0440\u043E\u0442\u043A\u0438\u0435 \u0434\u043B\u044F \u043A\u0443\u0431\u0430`,
-        text: `\u0415\u0441\u043B\u0438 \u0432\u043E\u0441\u0441\u0442\u0430\u043D\u043E\u0432\u0438\u0442\u044C \u043F\u043E \u0440\u0438\u0441\u0443\u043D\u043A\u0443 \u043D\u0430\u0441\u0442\u043E\u044F\u0449\u0443\u044E \u043A\u043E\u0440\u043E\u0431\u043A\u0443, ${B[c]} \u0440\u0451\u0431\u0440\u0430 \u0443 \u043D\u0435\u0451 \u0432 ${et(f > 1 ? f : 1 / f, 2)} \u0440\u0430\u0437\u0430 ${f > 1 ? "\u0434\u043B\u0438\u043D\u043D\u0435\u0435" : "\u043A\u043E\u0440\u043E\u0447\u0435"} \u0441\u0440\u0435\u0434\u043D\u0435\u0433\u043E. \u041F\u0440\u043E\u043F\u043E\u0440\u0446\u0438\u0438 \u0440\u0451\u0431\u0435\u0440: ${i.props.r.map((x, z) => B[z] + " " + et(x, 2)).join(" \xB7 ")}.`,
+        title: f > 1 ? `${D(B[c])} рёбра слишком длинные для куба` : `${D(B[c])} рёбра слишком короткие для куба`,
+        text: gd
+          ? `У настоящей коробки, которая получается из рисунка, ${B[c]} рёбра ${f > 1 ? "длиннее" : "короче"} ${others.map((x) => de[x]).join(" и ")} в ${et(f > 1 ? f : 1 / f, 2)} раза${pct ? ` (на ${pct}%)` : ""}. ${f > 1 ? "Укороти" : "Продли"} их до зелёных отметок на холсте: там кончались бы рёбра настоящего куба с тем же ближним углом и тем же взглядом.`
+          : `Если восстановить по рисунку настоящую коробку, ${B[c]} рёбра у неё в ${et(f > 1 ? f : 1 / f, 2)} раза ${f > 1 ? "длиннее" : "короче"} среднего.`,
       });
     }
     let R = vpReliable && s.cone !== void 0 ? s.cone : i.implied ? i.implied.cone : s.cone;
@@ -1710,6 +1720,45 @@
       (i.score = ge(i, m, E)),
       i
     );
+  }
+  function propGuide(t, M, n0, E) {
+    // сторона куба — по среднему из трёх направлений (медиана): обычно два направления нарисованы
+    // верно, и мерка подсказывает, что поправить только в третьем
+    let side = M.D.slice().sort((a, b) => a - b)[1],
+      ref = M.D.indexOf(side),
+      Xn = M.X[n0],
+      Y = [...Array(8)].map((_, k) =>
+        [0, 1, 2].map((q) => Xn[q] + [0, 1, 2].reduce((a, j) => a + M.R[q][j] * side * (((k >> j) & 1) - ((n0 >> j) & 1)), 0)),
+      );
+    if (Y.some((y) => !(y[2] > 0.02 * Xn[2]))) return null;
+    let P = Y.map((y) => [M.c[0] + (M.f * y[0]) / y[2], M.c[1] + (M.f * y[1]) / y[2]]),
+      obsN = t.obsV.find((v) => v.l === n0),
+      // совмещаем ближний угол мерки с нарисованным
+      sh = obsN ? [obsN.p[0] - P[n0][0], obsN.p[1] - P[n0][1]] : [0, 0];
+    P = P.map((p) => [p[0] + sh[0], p[1] + sh[1]]);
+    let fam = M.D.map((d) => d / side),
+      // меньше ~6% рука не различает — такие расхождения не показываем
+      tol = Math.max(6, 0.06 * E),
+      corners = t.obsV
+        .filter((v) => v.l !== n0)
+        .map((v) => {
+          let q = P[v.l],
+            d = Math.hypot(q[0] - v.p[0], q[1] - v.p[1]);
+          return { l: v.l, p: v.p, q, d, off: d > tol };
+        }),
+      // три ребра из ближнего угла: где должен быть их конец вдоль нарисованной линии
+      near = [0, 1, 2].map((j) => {
+        let l2 = n0 ^ lt[j],
+          o = t.obsV.find((v) => v.l === l2),
+          A = obsN ? obsN.p : P[n0],
+          q = P[l2],
+          dir = [q[0] - A[0], q[1] - A[1]],
+          L = Math.hypot(...dir) || 1;
+        if (!o) return { k: j, l: l2, q, have: !1 };
+        let cur = ((o.p[0] - A[0]) * dir[0] + (o.p[1] - A[1]) * dir[1]) / L;
+        return { k: j, l: l2, q, end: o.p, ratio: cur / L, have: !0, off: Math.abs(cur - L) > tol && Math.abs(cur / L - 1) > 0.06 };
+      });
+    return { near: n0, P, fam, ref, corners, edges: near, tol, any: corners.some((c) => c.off) };
   }
   function Mt(t, e, n) {
     return vt((100 * (n - t)) / (n - e), 0, 100);

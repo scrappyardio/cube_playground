@@ -221,6 +221,35 @@ try {
   ok(errors.length === 0, "ошибок в консоли нет" + (errors.length ? ": " + errors.join(" | ") : ""));
   await ctx.close();
 
+  // 9г. Мерка пропорций
+  console.log("Мерка пропорций");
+  const cp = makeCase("bad_props", 1);
+  ({ ctx, page, errors } = await openPage(browser, { storage: JSON.stringify({ free: cp.strokes.map((s) => ({ pts: s.pts, hidden: !!s.hidden })), target: "cube", layers: {} }) }));
+  await waitAnalysis(page);
+  const gd = await page.evaluate(() => { const g = window.perspectiveChecker.state.result.boxes[0].diag.guide; return { show: g.show, off: g.edges.filter((e) => e.off).map((e) => g.fam[e.k]) }; });
+  ok(gd.show && gd.off.length === 1 && gd.off[0] > 1.2, `вытянутый куб: мерка указывает одно вытянутое направление (×${gd.off.map((x) => x.toFixed(2)).join(", ")})`);
+  ok((await page.locator(".faces .face").count()) === 3, "в отчёте три развёрнутые грани");
+  ok(/длиннее нужного .* укороти/.test(await page.locator(".fix").innerText()), "в отчёте сказано, что укоротить: " + (await page.locator(".fix").innerText()).slice(0, 70));
+  ok((await page.evaluate(() => window.perspectiveChecker.state.layers.guide)) === true, "мерка включена по умолчанию");
+  const pix = async () => page.evaluate(() => { const cv = document.getElementById("cv"), d = cv.getContext("2d").getImageData(0, 0, cv.width, cv.height).data; let n = 0; for (let i = 0; i < d.length; i += 4) d[i + 1] > d[i] + 40 && d[i + 1] > d[i + 2] + 10 && n++; return n; });
+  const green1 = await pix();
+  await page.keyboard.press("g");
+  await page.waitForTimeout(150);
+  const green0 = await pix();
+  ok(green1 > green0 + 50, `G убирает зелёные отметки с холста (${green1} → ${green0} пикс.)`);
+  await page.keyboard.press("g");
+  await page.keyboard.press("r");
+  await page.waitForTimeout(400);
+  ok((await pix()) > green0 + 50, "отметки видны и на повёрнутом листе");
+  if (shots) await page.screenshot({ path: path.join(shots, "8-guide.png") });
+  ok(errors.length === 0, "ошибок в консоли нет" + (errors.length ? ": " + errors.join(" | ") : ""));
+  await ctx.close();
+  ({ ctx, page, errors } = await openPage(browser, { storage: JSON.stringify({ free: c.strokes.map((s) => ({ pts: s.pts, hidden: !!s.hidden })), target: "cube", layers: {} }) }));
+  await waitAnalysis(page);
+  ok(!(await page.evaluate(() => window.perspectiveChecker.state.result.boxes[0].diag.guide.show)), "у правильного куба мерка ничего не показывает");
+  ok(/одной длины/.test(await page.locator(".fix").innerText()), "в отчёте: все направления одной длины");
+  await ctx.close();
+
   // 10. Без Web Worker анализ идёт в основном потоке тем же кодом
   console.log("Запасной режим без Worker");
   ({ ctx, page, errors } = await openPage(browser, { noWorker: true, storage: "" }));
