@@ -1403,7 +1403,9 @@
             It = [ht[0] - ut[0] * ht[2], ht[1] - ut[1] * ht[2]];
           St[0] * It[0] + St[1] * It[1] > 0 ? (L += j.len) : (P += j.len);
         }),
-        (z.diverge = !I && P > L && x.spread > Math.max(2.2, 2 * x.rms)),
+        // слабое «расхождение» почти параллельных рёбер при рисунке, который настоящая коробка
+        // повторяет почти точно, — дрожание руки, а не обратная перспектива
+        (z.diverge = !I && P > L && x.spread > Math.max(2.2, 2 * x.rms) && !(x.spread < 4 && b && b.rms / E < 0.012)),
         f.length >= 3
           ? ((z.rms = x.rms),
             (z.maxAbs = x.maxAbs),
@@ -1473,6 +1475,13 @@
       (i.props.worst = z),
         (i.props.spread = Math.max(...M.D) / Math.min(...M.D)),
         (i.props.excess = Math.max(0, ...x.map((I) => Math.abs(I.lr) - 1.5 * I.s)));
+      // Насколько куб хуже коробки повторяет рисунок (в долях длины ребра). В некоторых ракурсах
+      // (почти фронтальный вид, слабая перспектива) длину рёбер вглубь не отличить от силы
+      // перспективы: коробка «находит» вытянутую глубину, хотя куб подходит почти так же хорошо.
+      // На стенде у правильных кубов разрыв не больше ~2%, у вытянутых в 1,45 раза — от 3%.
+      r.cube && r.box && E > 0 && (i.props.gap = Math.sqrt(Math.max(0, r.cube.rms ** 2 - r.box.rms ** 2)) / E);
+      // решает это сравнение, только если сами пропорции по ракурсу определяются неточно
+      i.props.cubeOk = i.props.gap !== void 0 && i.props.gap <= 0.025 && !i.props.determined;
     }
     // Мерка пропорций: настоящий куб с тем же ближним углом, теми же направлениями рёбер и той же
     // камерой, что у восстановленной коробки. Его углы — куда должны приходить рёбра рисунка.
@@ -1481,7 +1490,7 @@
     i.guide &&
       (i.guide.edges.forEach((q) => q.off && Math.abs(Math.log(i.guide.fam[q.k])) < 0.06 && (q.off = !1)),
       // а исправлять есть что только на самих рёбрах из ближнего угла
-      (i.guide.show = m === "cube" && !!i.props && i.props.excess > 0.07 && i.guide.edges.some((q) => q.off)));
+      (i.guide.show = m === "cube" && !!i.props && i.props.excess > 0.07 && !i.props.cubeOk && i.guide.edges.some((q) => q.off)));
     let g = i.nearLabel;
     if (t.vOfLabel[g] >= 0 && [0, 1, 2].every((c) => t.vOfLabel[g ^ lt[c]] >= 0) && t.obs.vis.length >= 3) {
       let c = t.obsV.find((I) => I.l === g).p,
@@ -1591,7 +1600,7 @@
           text: `\u0421\u0438\u043B\u044C\u043D\u0435\u0435 \u0432\u0441\u0435\u0433\u043E \u0432\u044B\u0431\u0438\u0432\u0430\u0435\u0442\u0441\u044F \u043E\u0434\u043D\u0430 \u043B\u0438\u043D\u0438\u044F: ${et(Math.abs(f.ang))}\xB0 ${f.ang > 0 ? "\u21BB \u043F\u043E \u0447\u0430\u0441\u043E\u0432\u043E\u0439" : "\u21BA \u043F\u0440\u043E\u0442\u0438\u0432 \u0447\u0430\u0441\u043E\u0432\u043E\u0439"} \u043E\u0442 \u043E\u0431\u0449\u0435\u0439 \u0442\u043E\u0447\u043A\u0438 \u0441\u0445\u043E\u0434\u0430. \u0420\u0430\u0437\u0431\u0440\u043E\u0441 \u043F\u043E \u0441\u0435\u043C\u0435\u0439\u0441\u0442\u0432\u0443 \u2014 ${et(c.rms)}\xB0.`,
         });
       }),
-      m === "cube" && i.props && i.props.excess > 0.07)
+      m === "cube" && i.props && i.props.excess > 0.07 && !i.props.cubeOk)
     ) {
       let gd = i.guide,
         c = gd ? [0, 1, 2].sort((x, z) => Math.abs(Math.log(gd.fam[z])) - Math.abs(Math.log(gd.fam[x])))[0] : i.props.worst,
@@ -1599,7 +1608,7 @@
         others = [0, 1, 2].filter((x) => x !== c),
         pct = Math.round(Math.abs(f - 1) * 100);
       k.push({
-        sev: i.props.excess > 0.2 ? 2 : 1,
+        sev: i.props.excess > 0.2 && (i.props.determined || !(i.props.gap !== void 0 && i.props.gap <= 0.04)) ? 2 : 1,
         kind: "props",
         fams: [c],
         title: f > 1 ? `${D(B[c])} рёбра слишком длинные для куба` : `${D(B[c])} рёбра слишком короткие для куба`,
@@ -1704,8 +1713,7 @@
       }),
       m === "cube" &&
         i.props &&
-        i.props.excess <= 0.07 &&
-        i.props.determined &&
+        ((i.props.excess <= 0.07 && i.props.determined) || i.props.cubeOk) &&
         d.push({
           kind: "ok",
           text: "\u041F\u0440\u043E\u043F\u043E\u0440\u0446\u0438\u0438 \u043A\u0430\u043A \u0443 \u043A\u0443\u0431\u0430",
@@ -1786,7 +1794,7 @@
         r.push({
           key: "props",
           name: "\u041F\u0440\u043E\u043F\u043E\u0440\u0446\u0438\u0438 \u043A\u0443\u0431\u0430",
-          val: Mt(t.props.excess, 0.04, 0.45),
+          val: t.props.cubeOk ? Mt(t.props.gap, 0.012, 0.06) : Mt(t.props.excess, 0.04, 0.45),
           w: 0.2,
         }),
       t.answer &&
@@ -2509,7 +2517,7 @@
   function ne(t, e, n) {
     return ke(te(t, e), n);
   }
-  self.__internals = { buildGraph: Dt, cutCandidates, analyzeSegs, parseQuality, analyze: te, segment: Ft, mergeLines: Tt, fit: H, fitConstrained: Zt };
+  self.__internals = { diag: Kt, buildGraph: Dt, cutCandidates, analyzeSegs, parseQuality, analyze: te, segment: Ft, mergeLines: Tt, fit: H, fitConstrained: Zt };
   self.onmessage = (t) => {
     let { id: e, strokes: n, opt: r, truth: a } = t.data;
     try {

@@ -3946,6 +3946,13 @@
     return `<div class="face${off ? " off" : ""}"><svg viewBox="0 0 100 88" aria-hidden="true"><rect x="${x}" y="${y}" width="${w}" height="${h}" fill="color-mix(in srgb, var(--ink) 4%, transparent)"/>${sq}${ln(x, y, x + w, y, i)}${ln(x, y + h, x + w, y + h, i)}${ln(x, y, x, y + h, j)}${ln(x + w, y, x + w, y + h, j)}</svg><b>1 : ${Et(b / a, 2)}</b><span><span class="sw" style="background:var(--fam${i})"></span>× <span class="sw" style="background:var(--fam${j})"></span></span></div>`;
   }
   function propsCard(s) {
+    if (M.target === "cube" && M.mode === "free" && s.props.cubeOk && s.props.excess > 0.07 && !(s.guide && s.guide.show)) {
+      let r = s.props.r,
+        odd = r.some((x) => Math.abs(Math.log(x)) > 0.1);
+      return `<div class="card"><h2>Пропорции куба</h2><ul class="fix" style="margin-top:0"><li><span class="ok">✓</span><span>Рисунок объясняется настоящим кубом: такой вид даёт куб с подходящей камерой.</span></li></ul>${
+        odd ? '<p class="small">В этом ракурсе длину рёбер вглубь трудно отличить от силы перспективы (коробка подбирается и вытянутой, и кубом), поэтому здесь проверяется главное — может ли рисунок быть кубом.</p>' : ""
+      }</div>`;
+    }
     let cube = M.target === "cube" && M.mode === "free",
       g = s.guide,
       r = cube && g ? g.fam : s.props.r,
