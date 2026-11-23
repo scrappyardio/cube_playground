@@ -274,6 +274,69 @@ try {
   ok(errors.length === 0, "ошибок в консоли нет" + (errors.length ? ": " + errors.join(" | ") : ""));
   await ctx.close();
 
+  // 9е. Журнал прогресса и «Пересчитать с нуля»
+  console.log("Журнал прогресса");
+  ({ ctx, page, errors } = await openPage(browser, { storage: JSON.stringify({ free: c.strokes.map((s) => ({ pts: s.pts, hidden: !!s.hidden })), target: "cube", layers: {} }) }));
+  await waitAnalysis(page);
+  ok(await page.locator("#saveJ").isEnabled(), "кнопка «В журнал» доступна после разбора");
+  await page.click("#saveJ");
+  await page.waitForFunction(() => /Сохранено/.test(document.getElementById("jNote").textContent));
+  ok((await page.locator("#saveJ").textContent()) === "Уже в журнале" && (await page.locator("#saveJ").isDisabled()), "повторно тот же рисунок не сохраняется");
+  ok((await page.locator("#jCount").textContent()) === "1", "счётчик журнала: 1");
+  await page.click("#journalBtn");
+  ok((await page.locator(".jcard").count()) === 1, "в журнале одна запись");
+  const th = await page.evaluate(() => { const sv = document.querySelector(".jthumb svg"); return { pl: sv.querySelectorAll("polyline").length, ln: sv.querySelectorAll("line").length }; });
+  ok(th.pl === c.strokes.length && th.ln === 12, `миниатюра: рисунок (${th.pl} штрихов) и правильный куб (${th.ln} рёбер)`);
+  ok(/Последние 1: средний балл 1\d\d|Последние 1: средний балл \d\d/.test(await page.locator("#jStats").innerText()), "статистика показана: " + (await page.locator("#jStats").innerText()).split("\n")[0]);
+  await page.keyboard.press("r");
+  ok((await page.evaluate(() => window.perspectiveChecker.state.rot)) === 0, "клавиши рисования не срабатывают, пока открыт журнал");
+  await page.uncheck("#jAnswer");
+  ok((await page.evaluate(() => document.querySelector(".jthumb svg").querySelectorAll("line").length)) === 0, "правильный куб на миниатюре можно скрыть");
+  await page.check("#jAnswer");
+  // экспорт
+  const [dl] = await Promise.all([page.waitForEvent("download"), page.click("#jExport")]);
+  const exported = JSON.parse(fs.readFileSync(await dl.path(), "utf8"));
+  ok(exported.entries.length === 1 && exported.entries[0].s.length === c.strokes.length && typeof exported.entries[0].score === "number", "журнал скачивается файлом JSON");
+  // импорт: та же запись (дубликат) + новая
+  const extra = { ...exported.entries[0], id: "jimported-1", t: exported.entries[0].t - 86400000, score: 64, grade: "неплохо" };
+  const tmp = path.join(shots || "/tmp", "journal-import.json");
+  fs.writeFileSync(tmp, JSON.stringify({ entries: [exported.entries[0], extra] }));
+  await page.setInputFiles("#jImport", tmp);
+  await page.waitForFunction(() => document.querySelectorAll(".jcard").length === 2);
+  ok(/добавлено записей: 1/.test(await page.locator("#jNote").textContent()), "импорт добавил только новую запись");
+  await page.click("#jClose");
+  // перезагрузка: журнал на месте
+  await page.reload();
+  await waitAnalysis(page);
+  ok((await page.locator("#jCount").textContent()) === "2", "журнал сохраняется после перезагрузки");
+  // рисуем ещё штрих — снова можно сохранить; потом возвращаем сохранённый рисунок на лист
+  await page.click("#toolLine");
+  await drawStroke(page, [[300, 150], [380, 150]]);
+  await waitAnalysis(page);
+  ok(await page.locator("#saveJ").isEnabled(), "после изменения рисунка снова можно сохранить");
+  await page.click("#journalBtn");
+  await page.locator('.jcard button[data-act="load"]').first().click();
+  await waitAnalysis(page);
+  ok((await page.evaluate(() => window.perspectiveChecker.state.strokes.length)) === exported.entries[0].s.length, "«На лист» возвращает сохранённый рисунок");
+  // удаление в два нажатия
+  await page.click("#journalBtn");
+  const del = page.locator(".jcard button.del").last();
+  await del.click();
+  ok((await page.locator(".jcard").count()) === 2 && /Точно/.test(await del.textContent()), "первое нажатие «Удалить» только спрашивает");
+  await del.click();
+  await page.waitForFunction(() => document.querySelectorAll(".jcard").length === 1);
+  ok((await page.locator("#jCount").textContent()) === "1", "второе нажатие удаляет запись");
+  if (shots) await page.screenshot({ path: path.join(shots, "9-journal.png") });
+  await page.click("#jClose");
+  // пересчитать с нуля
+  const sc0 = await page.evaluate(() => window.perspectiveChecker.state.result.boxes[0].diag.score.total);
+  await page.click("#recalc");
+  await waitAnalysis(page);
+  ok(/пересчитано с нуля/.test(await status(page)), "«Пересчитать с нуля» разбирает заново: " + (await status(page)));
+  ok((await page.evaluate(() => window.perspectiveChecker.state.result.boxes[0].diag.score.total)) === sc0, "у правильного куба оценка после пересчёта та же");
+  ok(errors.length === 0, "ошибок в консоли нет" + (errors.length ? ": " + errors.join(" | ") : ""));
+  await ctx.close();
+
   // 10. Без Web Worker анализ идёт в основном потоке тем же кодом
   console.log("Запасной режим без Worker");
   ({ ctx, page, errors } = await openPage(browser, { noWorker: true, storage: "" }));

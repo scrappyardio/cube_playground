@@ -72,6 +72,42 @@ h1 { font-size: 19px; line-height: 1.1; margin: 0; font-weight: 700; letter-spac
 .zoom { position: absolute; right: 10px; bottom: 10px; display: flex; gap: 4px }
 .zoom button { border: 1px solid var(--line); background: var(--surface); border-radius: 7px; padding: 4px 9px; font-size: 12px; cursor: pointer }
 
+/* ---------- журнал прогресса ---------- */
+.jcount { font: 600 11px var(--mono); color: var(--muted) }
+.ractions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center }
+.primary { border: 1px solid var(--answer); background: var(--answer); color: #fff; padding: 6px 13px; border-radius: 8px; cursor: pointer; font-size: 13px; font-weight: 600 }
+.primary:disabled { background: var(--surface); color: var(--faint); border-color: var(--line); cursor: default }
+.jnote { font-size: 12.5px; color: var(--muted) }
+.jdlg { width: min(1040px, calc(100vw - 24px)); max-height: calc(100vh - 32px); border: 1px solid var(--line); border-radius: 14px; background: var(--desk); color: var(--ink); padding: 0 }
+.jdlg::backdrop { background: color-mix(in srgb, #000 38%, transparent) }
+.jhead { display: flex; align-items: center; gap: 12px; padding: 14px 18px 8px; position: sticky; top: 0; background: var(--desk); z-index: 1 }
+.jhead h2 { margin: 0; font-size: 18px }
+.jstore { font-size: 12px; color: var(--muted) }
+.jhead .x { margin-left: auto; border: 1px solid var(--line); background: var(--surface); border-radius: 8px; font-size: 18px; line-height: 1; padding: 4px 10px; cursor: pointer }
+.jstats { margin: 0 18px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 12px 16px; display: grid; gap: 4px; font-size: 13px }
+.jstats .big { font-size: 15px; font-weight: 600 }
+.jstats .goal { color: var(--answer); font-weight: 600 }
+.jstats .notyet { color: var(--sev1); font-weight: 600 }
+.jtools { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; padding: 12px 18px }
+.jchk { font-size: 13px; color: var(--muted); display: inline-flex; gap: 6px; align-items: center }
+.jfile { position: relative; overflow: hidden }
+.jfile input { position: absolute; inset: 0; opacity: 0; cursor: pointer }
+.jgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; padding: 0 18px 18px }
+.jcard { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 10px; display: grid; gap: 8px }
+.jthumb { background: var(--paper); border: 1px solid var(--line); border-radius: 8px; aspect-ratio: 16 / 10; overflow: hidden }
+.jthumb svg { display: block; width: 100%; height: 100% }
+.jmeta { display: grid; grid-template-columns: auto 1fr; gap: 0 10px; align-items: center }
+.jscore { font: 700 26px var(--mono); grid-row: span 2 }
+.jgrade { font-weight: 600; font-size: 13.5px }
+.jsub { font-size: 12px; color: var(--muted) }
+.jissues { margin: 0; padding: 0; list-style: none; font-size: 12px; color: var(--muted); display: grid; gap: 2px }
+.jissues li::before { content: "• "; color: var(--sev2) }
+.jbtns { display: flex; gap: 6px }
+.jbtns button { border: 1px solid var(--line); background: var(--surface); border-radius: 7px; padding: 4px 10px; font-size: 12.5px; cursor: pointer }
+.jbtns button.del { margin-left: auto; color: var(--muted) }
+.jbtns button.del.arm { color: var(--bad); border-color: var(--bad) }
+.jempty { color: var(--muted); padding: 8px 0 }
+
 /* ---------- образец для срисовки ---------- */
 .ref { position: absolute; right: 10px; top: 10px; width: 240px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 8px; box-shadow: 0 2px 10px color-mix(in srgb, var(--ink) 10%, transparent) }
 .ref.big { width: min(400px, calc(100% - 20px)) }
@@ -189,6 +225,7 @@ h1 { font-size: 19px; line-height: 1.1; margin: 0; font-weight: 700; letter-spac
       <button id="tBox" aria-pressed="false" title="Любые пропорции: проверяется только перспектива">Коробка</button>
     </div>
     <div class="spacer"></div>
+    <button id="journalBtn" class="ghost" title="Журнал прогресса: сохранённые рисунки и баллы">Журнал <span id="jCount" class="jcount"></span></button>
     <button id="exampleBtn" class="ghost" title="Загрузить пример рисунка с ошибками">Пример</button>
     <button id="helpBtn" class="ghost" aria-expanded="false">Как это работает</button>
   </header>
@@ -267,8 +304,35 @@ h1 { font-size: 19px; line-height: 1.1; margin: 0; font-weight: 700; letter-spac
       </div>
     </section>
 
-    <aside class="report" id="report" aria-live="polite"></aside>
+    <aside class="report" id="report">
+      <div class="ractions">
+        <button id="saveJ" class="primary" disabled title="Сохранить рисунок, миниатюру и баллы в журнал">В журнал</button>
+        <button id="recalc" class="ghost" title="Забыть прошлый разбор и разобрать рисунок заново, перебирая больше вариантов">Пересчитать с нуля</button>
+        <span class="jnote" id="jNote" role="status"></span>
+      </div>
+      <div id="reportBody" aria-live="polite"></div>
+    </aside>
   </main>
+  <dialog class="jdlg" id="journal" aria-labelledby="jTitle">
+    <div class="jhead">
+      <h2 id="jTitle">Журнал прогресса</h2>
+      <span class="jstore" id="jStore"></span>
+      <button class="x" id="jClose" aria-label="Закрыть журнал">×</button>
+    </div>
+    <div class="jstats" id="jStats"></div>
+    <div class="jtools">
+      <div class="seg" role="group" aria-label="Какие записи показывать">
+        <button data-f="all" aria-pressed="true">Все</button>
+        <button data-f="free" aria-pressed="false">Свободный рисунок</button>
+        <button data-f="face" aria-pressed="false">По грани</button>
+      </div>
+      <label class="jchk"><input type="checkbox" id="jAnswer" checked> правильный куб на миниатюрах</label>
+      <span class="spacer"></span>
+      <button id="jExport" class="ghost">Скачать журнал</button>
+      <label class="ghost jfile">Загрузить из файла<input type="file" id="jImport" accept=".json,application/json"></label>
+    </div>
+    <div class="jgrid" id="jGrid"></div>
+  </dialog>
 </div>
 <!--WORKER-->
 <!--APP-->

@@ -3,7 +3,7 @@ import fs from "node:fs";
 import { createRequire } from "node:module";
 import { loadAnalyzer } from "./lib.mjs";
 import { makeCase, PAGE } from "./cases.mjs";
-const [name, seed, outp = "/tmp/claude-0/-home-user/681e32ae-7246-5530-8ea6-e9ff7c8ac8fb/scratchpad/show.png"] = process.argv.slice(2);
+const [name, seed, outp = "/tmp/claude-0/-home-user-cube-playground/681e32ae-7246-5530-8ea6-e9ff7c8ac8fb/scratchpad/show.png"] = process.argv.slice(2);
 const c = makeCase(name, +seed);
 const r = loadAnalyzer()(c.strokes, c.opt);
 const col = ["#DD5F27", "#2C68D6", "#BF3A8C"];

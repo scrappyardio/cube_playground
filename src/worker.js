@@ -1978,16 +1978,21 @@
     // одну прямую). Признаки: часть линий не стала рёбрами или ни одна настоящая коробка не подходит.
     // Разрезаем подозрительные линии и разбираем заново; разрез оставляем, только если он объясняет
     // рисунок заметно лучше. Число попыток фиксировано, чтобы результат не зависел от скорости компьютера.
-    if (v.lines.length >= 7 && v.lines.length <= 18 && needsRetry(v)) {
+    // «Пересчитать с нуля» (deep): порог ниже, попыток и вариантов больше
+    let deep = !!e.deep,
+      want = (x) => (deep ? unexplainedFrac(x) > 0.015 || fitBadness(x) > 0.012 : needsRetry(x));
+    if (v.lines.length >= 7 && v.lines.length <= (deep ? 30 : 18) && want(v)) {
       let attempts = 0;
       // предварительный результат сразу, уточнённый — следом
       e.onPartial && ((v.ms = zt() - n), e.onPartial(v));
-      for (let round = 0; round < 3 && needsRetry(v); round++) {
+      for (let round = 0; round < (deep ? 5 : 3) && want(v); round++) {
         let improved = !1;
-        for (let cand of cutCandidates(m, v.lines).slice(0, 4)) {
-          if (attempts++ >= (e.maxRetries ?? 4)) break;
-          let v2 = analyzeSegs(cand.m, b, e);
-          if (v2.boxes.length >= v.boxes.length && parseQuality(v2) < parseQuality(v) - 0.015) {
+        for (let cand of cutCandidates(m, v.lines).slice(0, deep ? 8 : 4)) {
+          if (attempts++ >= (e.maxRetries ?? (deep ? 8 : 4))) break;
+          // повторные разборы — с обычным набором масштабов, иначе «с нуля» слишком долго
+          let v2 = analyzeSegs(cand.m, b, { ...e, deep: !1 });
+          v2.dropped = (v.dropped || 0) + (cand.drop || 0);
+          if (v2.boxes.length >= v.boxes.length && parseQuality(v2) < parseQuality(v) - (deep ? 0.006 : 0.015)) {
             (v = v2), (m = cand.m), (improved = !0);
             break;
           }
@@ -2011,8 +2016,10 @@
   }
   // Доля длины линий, которые не удалось сделать рёбрами коробки.
   function unexplainedFrac(v) {
-    let tot = v.lines.reduce((g, s) => g + s.len, 0) || 1;
-    return v.loose.reduce((g, s) => g + v.lines[s].len, 0) / tot;
+    // отброшенные при повторном разборе обрывки считаются неразобранными: выбросить линию «просто так» не выгодно
+    let dr = v.dropped || 0,
+      tot = v.lines.reduce((g, s) => g + s.len, 0) + dr || 1;
+    return (v.loose.reduce((g, s) => g + v.lines[s].len, 0) + dr) / tot;
   }
   // Отрезок, ориентированный от первой точки к последней (как в разбиении штриха).
   function mkSeg(pts, base) {
@@ -2128,6 +2135,14 @@
         }
       });
     });
+    // короткий обрывок (крючок, хвост штриха), который мешает собрать углы
+    let lens = lines.map((L) => L.len).sort((a, b) => a - b),
+      med = lens[lens.length >> 1] || 1;
+    lines.forEach((L) => {
+      if (L.len > 0.22 * med) return;
+      let gone = new Set(L.members);
+      out.push({ m: m.filter((_, i) => !gone.has(i)), drop: L.len, score: 5e3 + (0.22 * med - L.len) });
+    });
     m.forEach((s, i) => {
       let P = s.pts;
       if (!P || P.length < 12 || s.len < 0.06 * diag) return;
@@ -2159,7 +2174,7 @@
     if (h.length < 3) return (v.error = "few-lines"), v;
     let E = N(h.flatMap((i) => [i.a, i.b])).diag,
       k = null;
-    for (let i of [1, 0.6, 1.6]) {
+    for (let i of e.deep ? [1, 0.6, 1.6, 0.8, 1.25, 2.2] : [1, 0.6, 1.6]) {
       let u = Dt(h, m, i),
         y = Xt(u).filter((g) => g.length >= 3),
         S = [];

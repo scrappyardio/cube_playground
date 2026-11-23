@@ -2667,6 +2667,270 @@
   function refSet(seed) {
     (M.ref.seed = refSeedOf(seed)), qt(), refSync();
   }
+  // ---------- Журнал прогресса ----------
+  // Записи: рисунок (векторная миниатюра), правильный куб, балл и замечания. Хранятся в браузере;
+  // в опубликованной версии — ещё и в личном хранилище страницы (видно только этому человеку).
+  var JKEY = "perspective-checker.journal.v1",
+    jr = { entries: [], col: null, store: "local", answer: !0, filter: "all", lastKey: null };
+  var jrValid = (e) => e && typeof e.id == "string" && typeof e.t == "number" && Array.isArray(e.s) && typeof e.score == "number";
+  function jrLoadLocal() {
+    try {
+      let a = JSON.parse(localStorage.getItem(JKEY) || "[]");
+      return Array.isArray(a) ? a.filter(jrValid) : [];
+    } catch {
+      return [];
+    }
+  }
+  function jrSaveLocal() {
+    try {
+      return localStorage.setItem(JKEY, JSON.stringify(jr.entries)), !0;
+    } catch {
+      return !1;
+    }
+  }
+  function jrMerge(list) {
+    let m = new Map(jr.entries.map((e) => [e.id, e]));
+    for (let e of list) jrValid(e) && !m.has(e.id) && m.set(e.id, e);
+    jr.entries = [...m.values()].sort((a, b) => b.t - a.t).slice(0, 1e3);
+  }
+  var withTimeout = (p, ms) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej({ code: "timeout" }), ms))]);
+  async function jrConnect() {
+    let c = window.claude;
+    if (!c || typeof c.use != "function") return;
+    try {
+      let [db, user] = await Promise.all([c.use("db"), c.use("user")]);
+      if (!db || !user) return;
+      let uid = await user.id();
+      if (!uid) return;
+      let col = db.doc("data/users/" + uid + "/journal").collection("entries"),
+        snap = await withTimeout(col.orderBy("t", "desc").limit(1e3).get(), 1e4),
+        remote = snap.docs.map((d) => d.data()).filter(jrValid),
+        ids = new Set(remote.map((e) => e.id)),
+        localOnly = jr.entries.filter((e) => !ids.has(e.id));
+      (jr.col = col), (jr.store = "cloud"), jrMerge(remote), jrSaveLocal();
+      for (let e of localOnly)
+        try {
+          await col.doc(e.id).set(e);
+        } catch (err) {
+          if (err && err.code === "invalid_argument") {
+            (jr.col = null), (jr.store = "local");
+            break;
+          }
+        }
+      jrRender();
+    } catch {}
+  }
+  // упрощение штриха (Рамер — Дуглас — Пекер), координаты с точностью 0,1
+  function jrSimplify(pts, tol) {
+    if (pts.length < 3) return pts;
+    let keep = new Uint8Array(pts.length),
+      st = [[0, pts.length - 1]];
+    (keep[0] = 1), (keep[pts.length - 1] = 1);
+    for (; st.length; ) {
+      let [a, b] = st.pop(),
+        A = pts[a],
+        B = pts[b],
+        dx = B[0] - A[0],
+        dy = B[1] - A[1],
+        L = Math.hypot(dx, dy) || 1,
+        best = -1,
+        bd = tol;
+      for (let i = a + 1; i < b; i++) {
+        let d = Math.abs((pts[i][0] - A[0]) * dy - (pts[i][1] - A[1]) * dx) / L;
+        d > bd && ((bd = d), (best = i));
+      }
+      best > 0 && ((keep[best] = 1), st.push([a, best], [best, b]));
+    }
+    return pts.filter((_, i) => keep[i]);
+  }
+  var faceGrade = (u) => (u >= 90 ? "почти точно" : u >= 70 ? "близко" : u >= 45 ? "есть расхождения" : "далеко от ответа");
+  // что можно сохранить прямо сейчас
+  function jrCurrent() {
+    let r = M.result;
+    if (!r || M.stale || M.busy || !r.boxes.length) return null;
+    let b = r.boxes[M.sel] || r.boxes[0],
+      face = M.mode === "face" && M.face,
+      score,
+      grade,
+      parts;
+    if (face) {
+      if (!r.truth || (r.truth.nNew || 0) < 3) return null;
+      (score = faceScore(r.truth.rms / (b.diag.scale || 1))), (grade = faceGrade(score));
+      parts = [{ k: "corners", n: "Углы в среднем от правильных, пикс.", v: Math.round(r.truth.rms) }];
+    } else {
+      if (!b.diag.score) return null;
+      (score = b.diag.score.total), (grade = b.diag.score.grade), (parts = b.diag.score.parts.map((q) => ({ k: q.key, n: q.name, v: q.val })));
+    }
+    let s = M.strokes
+        .filter((q) => q.pts.length > 1)
+        .map((q) => ({ h: q.hidden ? 1 : 0, g: q.given ? 1 : 0, p: jrSimplify(q.pts, 1).flatMap((p) => [Math.round(p[0] * 10) / 10, Math.round(p[1] * 10) / 10]) })),
+      fit = face ? M.face.B : M.target === "cube" ? b.fits.cube : b.fits.box,
+      ans = fit && fit.P ? fit.P.flatMap((p) => [Math.round(p[0] * 10) / 10, Math.round(p[1] * 10) / 10]) : null;
+    return {
+      key: JSON.stringify(s) + M.mode + M.target,
+      entry: {
+        v: 1,
+        mode: face ? "face" : "free",
+        target: face ? "cube" : M.target,
+        score,
+        grade,
+        parts,
+        issues: b.diag.issues.filter((q) => q.sev >= 1).slice(0, 4).map((q) => ({ sev: q.sev, title: q.title })),
+        seed: M.ref.on ? M.ref.seed : null,
+        rot: M.rot,
+        s,
+        ans,
+      },
+    };
+  }
+  function jrNote(t) {
+    D("jNote").textContent = t;
+  }
+  function jrUpdateActions() {
+    let c = jrCurrent(),
+      btn = D("saveJ");
+    (btn.disabled = !c || c.key === jr.lastKey),
+      (btn.textContent = c && c.key === jr.lastKey ? "Уже в журнале" : "В журнал"),
+      (D("recalc").disabled = !M.strokes.some((q) => !q.given));
+  }
+  async function jrAdd() {
+    let c = jrCurrent();
+    if (!c || c.key === jr.lastKey) return;
+    let t = Date.now(),
+      e = { id: "j" + t + "-" + Math.random().toString(36).slice(2, 7), t, ...c.entry };
+    jr.entries.unshift(e), (jr.lastKey = c.key);
+    let okLocal = jrSaveLocal(),
+      where = okLocal ? "в браузере" : "";
+    if (jr.col)
+      try {
+        await jr.col.doc(e.id).set(e), (where = "в личном хранилище");
+      } catch (err) {
+        err && err.code === "quota_exceeded" && (where = (where ? where + "; " : "") + "хранилище страницы заполнено — скачай журнал и удали старые записи");
+      }
+    jrNote(where ? `Сохранено (${where}): ${e.score} — запись ${jr.entries.length}` : "Не удалось сохранить: браузер не даёт места. Скачай журнал."), jrRender(), jrUpdateActions();
+  }
+  async function jrDelete(id) {
+    (jr.entries = jr.entries.filter((e) => e.id !== id)), jrSaveLocal();
+    if (jr.col)
+      try {
+        await jr.col.doc(id).delete();
+      } catch {}
+    (jr.lastKey = null), jrRender(), jrUpdateActions();
+  }
+  function jrPts(e) {
+    let un = (a) => {
+        let o = [];
+        for (let i = 0; i + 1 < a.length; i += 2) o.push([a[i], a[i + 1]]);
+        return o;
+      },
+      rot = (p) => rotV(p, ((e.rot || 0) * Math.PI) / 2);
+    return { strokes: e.s.map((q) => ({ h: q.h, g: q.g, p: un(q.p).map(rot) })), ans: e.ans ? un(e.ans).map(rot) : null };
+  }
+  function jrThumb(e) {
+    let { strokes, ans } = jrPts(e),
+      all = strokes.flatMap((q) => q.p).concat(jr.answer && ans ? ans : []);
+    if (!all.length) return "";
+    let W = 320,
+      H = 200,
+      xs = all.map((p) => p[0]),
+      ys = all.map((p) => p[1]),
+      x0 = Math.min(...xs),
+      y0 = Math.min(...ys),
+      bw = Math.max(...xs) - x0 || 1,
+      bh = Math.max(...ys) - y0 || 1,
+      k = Math.min((W - 24) / bw, (H - 24) / bh),
+      ox = (W - k * bw) / 2 - k * x0,
+      oy = (H - k * bh) / 2 - k * y0,
+      f = (p) => `${(ox + k * p[0]).toFixed(1)},${(oy + k * p[1]).toFixed(1)}`,
+      out = "";
+    if (jr.answer && ans)
+      for (let [a, b] of ct) out += `<line x1="${f(ans[a]).split(",")[0]}" y1="${f(ans[a]).split(",")[1]}" x2="${f(ans[b]).split(",")[0]}" y2="${f(ans[b]).split(",")[1]}" stroke="var(--answer)" stroke-width="1.3" opacity=".6"/>`;
+    for (let q of strokes)
+      out += `<polyline points="${q.p.map(f).join(" ")}" fill="none" stroke="var(--ink)" stroke-width="${q.g ? 2.4 : 1.6}" stroke-linecap="round" stroke-linejoin="round"${q.h ? ' stroke-dasharray="5 4"' : ""}/>`;
+    return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Миниатюра рисунка">${out}</svg>`;
+  }
+  function jrStats(list) {
+    if (!list.length) return '<p class="jempty" style="margin:0">Записей пока нет. Нарисуй куб и нажми «В журнал» над отчётом.</p>';
+    let last = list.slice(0, 10),
+      avg = Math.round(last.reduce((g, e) => g + e.score, 0) / last.length),
+      hi = last.filter((e) => e.score >= 90).length,
+      lo = last.filter((e) => e.score < 75).length,
+      goal = last.length >= 10 && hi >= 8 && lo === 0,
+      best = Math.max(...list.map((e) => e.score));
+    return `<div class="big">Последние ${last.length}: средний балл ${avg} · 90 и выше — ${hi} из ${last.length} · ниже 75 — ${lo}</div>
+      <div>Всего записей: ${list.length} · лучший балл: ${best}</div>
+      <div class="${goal ? "goal" : "notyet"}">${goal ? "✓ Стабильно: 8 из 10 последних на 90+ и ни одного ниже 75 — можно двигаться дальше." : `Цель: 8 из 10 последних на 90+ и ни одного ниже 75${last.length < 10 ? ` (нужно ещё ${10 - last.length} ${10 - last.length === 1 ? "запись" : 10 - last.length < 5 ? "записи" : "записей"})` : ""}.`}</div>`;
+  }
+  function jrRender() {
+    D("jCount").textContent = jr.entries.length ? String(jr.entries.length) : "";
+    let dlg = D("journal");
+    if (!dlg.open) return;
+    let list = jr.entries.filter((e) => jr.filter === "all" || e.mode === jr.filter);
+    (D("jStore").textContent = jr.store === "cloud" ? "хранится в личном хранилище страницы и в браузере" : "хранится в этом браузере — скачивай журнал, чтобы не потерять"),
+      (D("jStats").innerHTML = jrStats(list)),
+      document.querySelectorAll(".jtools .seg button").forEach((b) => b.setAttribute("aria-pressed", b.dataset.f === jr.filter));
+    let fmt = (t) => {
+      try {
+        return new Date(t).toLocaleString("ru-RU", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+      } catch {
+        return "";
+      }
+    };
+    D("jGrid").innerHTML = list.length
+      ? list
+          .map(
+            (e) => `<article class="jcard"><div class="jthumb">${jrThumb(e)}</div>
+      <div class="jmeta"><b class="jscore" style="color:${Gt(e.score)}">${e.score}</b><span class="jgrade">${de(Yn(e.grade || ""))}</span><span class="jsub">${fmt(e.t)} · ${e.mode === "face" ? "по грани" : e.target === "box" ? "коробка" : "куб"}${e.seed ? " · образец " + e.seed : ""}</span></div>
+      ${e.issues && e.issues.length ? `<ul class="jissues">${e.issues.map((q) => `<li>${de(q.title)}</li>`).join("")}</ul>` : '<ul class="jissues"><li style="list-style:none">без замечаний</li></ul>'}
+      <div class="jbtns">${e.mode === "free" ? `<button data-act="load" data-id="${e.id}" title="Вернуть этот рисунок на лист (текущий можно вернуть через ⌘Z)">На лист</button>` : ""}<button class="del" data-act="del" data-id="${e.id}" aria-label="Удалить запись">Удалить</button></div></article>`,
+          )
+          .join("")
+      : '<p class="jempty">Нет записей в этом разделе.</p>';
+  }
+  function jrLoadToSheet(id) {
+    let e = jr.entries.find((q) => q.id === id);
+    if (!e || e.mode !== "free") return;
+    M.mode !== "free" && $e("free", !0), Qt();
+    let un = (a) => {
+      let o = [];
+      for (let i = 0; i + 1 < a.length; i += 2) o.push([a[i], a[i + 1]]);
+      return o;
+    };
+    (M.strokes = e.s.filter((q) => !q.g).map((q) => ({ pts: un(q.p), hidden: !!q.h }))), (M.target = e.target || "cube"), Ot(), D("journal").close(), Bt();
+  }
+  async function jrExport() {
+    let data = JSON.stringify({ app: "perspective-checker", version: 1, exported: new Date().toISOString(), entries: jr.entries }, null, 1),
+      name = "zhurnal-perspektiva-" + new Date().toISOString().slice(0, 10) + ".json",
+      c = window.claude;
+    try {
+      let dl = c && typeof c.use == "function" ? await withTimeout(c.use("downloads"), 3e3).catch(() => null) : null;
+      if (dl) {
+        await dl.save({ filename: name, data });
+        return;
+      }
+    } catch (err) {
+      if (err && err.code === "declined") return;
+    }
+    let a = document.createElement("a");
+    (a.href = URL.createObjectURL(new Blob([data], { type: "application/json" }))), (a.download = name), document.body.appendChild(a), a.click(), a.remove();
+  }
+  async function jrImport(file) {
+    try {
+      let j = JSON.parse(await file.text()),
+        list = (Array.isArray(j) ? j : j.entries || []).filter(jrValid),
+        before = new Set(jr.entries.map((e) => e.id)),
+        fresh = list.filter((e) => !before.has(e.id));
+      jrMerge(fresh), jrSaveLocal();
+      if (jr.col)
+        for (let e of fresh)
+          try {
+            await jr.col.doc(e.id).set(e);
+          } catch {}
+      jrRender(), jrNote(`Из файла добавлено записей: ${fresh.length}`);
+    } catch {
+      jrNote("Не получилось прочитать файл журнала");
+    }
+  }
   var ke = () => JSON.stringify(M.strokes);
   function Qt() {
     M.undo.push(ke()), M.undo.length > 150 && M.undo.shift(), (M.redo = []), dt();
@@ -2751,11 +3015,21 @@
     }, 0);
   }
   function pt() {
-    (M.stale = !0), clearTimeout(on), (on = setTimeout(Nn, 140));
+    (M.stale = !0), clearTimeout(on), (on = setTimeout(Nn, 140)), jrUpdateActions();
+  }
+  // «Пересчитать с нуля»: новый фоновый поток, прошлый разбор забыт, перебор вариантов шире.
+  var deepNext = !1,
+    lastDeep = !1;
+  function recalcFresh() {
+    try {
+      yt && yt.terminate();
+    } catch {}
+    (yt = spawnWorker()), (wBusy = !1), (localAnalyze = null), (M.result = null), (M.hl = null), (deepNext = !0);
+    clearTimeout(on), Lt(), O(), Nn(), jrNote("");
   }
   function Nn() {
     let t = M.strokes.filter((s) => s.pts.length > 1).map((s) => ({ pts: s.pts, hidden: !!s.hidden })),
-      e = { target: M.mode === "face" ? "cube" : M.target, page: F },
+      e = { target: M.mode === "face" ? "cube" : M.target, page: F, deep: deepNext },
       n = M.mode === "face" && M.face ? { P: M.face.B.P, given: M.face.labels } : null;
     if (
       (ge++,
@@ -2766,6 +3040,7 @@
       (M.busy = !1), (pending = null), Me(null);
       return;
     }
+    (lastDeep = deepNext), (deepNext = !1), lastDeep && Zt("\u043F\u0435\u0440\u0435\u0441\u0447\u0451\u0442 \u0441 \u043D\u0443\u043B\u044F\u2026");
     let job = { id: ge, strokes: t, opt: e, truth: n };
     if (((pending = job), yt && wBusy)) {
       // старый разбор ещё идёт — он уже не нужен
@@ -2790,7 +3065,9 @@
           ? `${t.boxes.length ? (t.boxes.length === 1 ? "1 \u043A\u043E\u0440\u043E\u0431\u043A\u0430" : t.boxes.length + " \u043A\u043E\u0440\u043E\u0431\u043A\u0438") : "\u043A\u043E\u0440\u043E\u0431\u043A\u0438 \u043D\u0435\u0442"} \xB7 \u043B\u0438\u043D\u0438\u0439 ${t.lines.length} \xB7 ${Math.round(t.ms)} \u043C\u0441`
           : "",
       ),
+      t && lastDeep && Zt(D("status").textContent + " \xB7 \u043F\u0435\u0440\u0435\u0441\u0447\u0438\u0442\u0430\u043D\u043E \u0441 \u043D\u0443\u043B\u044F"),
       Lt(),
+      jrUpdateActions(),
       O();
   }
   function Zt(t) {
@@ -3088,6 +3365,7 @@
     { passive: !1 },
   );
   window.addEventListener("keydown", (t) => {
+    if (D("journal").open) return;
     if (t.target.tagName === "INPUT" && t.target.type !== "range" && t.target.type !== "file") return;
     let e = t.metaKey || t.ctrlKey,
       n = t.key.toLowerCase();
@@ -3694,7 +3972,7 @@
     return `<div class="card"><h2>Пропорции ${cube ? "куба" : "коробки"}</h2><div class="faces">${faces}</div>${fix}<p class="small">Три видимые грани восстановленной коробки, развёрнутые к тебе.${cube ? " Пунктир — квадрат, каким грань была бы у куба. Длина сравнивается с направлением, которое ближе всего к среднему." : ""}${s.props.determined ? "" : " По этому рисунку пропорции определяются неточно."}</p></div>`;
   }
   function Lt() {
-    let t = D("report"),
+    let t = D("reportBody"),
       e = M.result;
     if (!e || (!e.boxes.length && !M.strokes.some((h) => !h.given))) {
       t.innerHTML = `<div class="card empty"><h2>${M.mode === "face" ? "\u0414\u043E\u0440\u0438\u0441\u0443\u0439 \u043A\u0443\u0431 \u043F\u043E \u0433\u0440\u0430\u043D\u0438" : "\u041D\u0430\u0440\u0438\u0441\u0443\u0439 \u043A\u0443\u0431 \u0438\u043B\u0438 \u043A\u043E\u0440\u043E\u0431\u043A\u0443"}</h2>
@@ -3860,6 +4138,28 @@
     (t.hidden = !t.hidden), D("helpBtn").setAttribute("aria-expanded", !t.hidden), requestAnimationFrame(ye);
   };
   D("fitPage").onclick = we;
+  D("saveJ").onclick = jrAdd;
+  D("recalc").onclick = recalcFresh;
+  D("journalBtn").onclick = () => {
+    let d = D("journal");
+    d.open || (typeof d.showModal == "function" ? d.showModal() : d.setAttribute("open", "")), jrRender();
+  };
+  D("jClose").onclick = () => D("journal").close();
+  D("jAnswer").onchange = (e) => ((jr.answer = e.target.checked), jrRender());
+  document.querySelectorAll(".jtools .seg button").forEach((b) => (b.onclick = () => ((jr.filter = b.dataset.f), jrRender())));
+  D("jExport").onclick = jrExport;
+  D("jImport").onchange = (e) => {
+    let f = e.target.files && e.target.files[0];
+    f && jrImport(f), (e.target.value = "");
+  };
+  D("jGrid").addEventListener("click", (e) => {
+    let b = e.target.closest("button[data-act]");
+    if (!b) return;
+    if (b.dataset.act === "load") return jrLoadToSheet(b.dataset.id);
+    if (b.classList.contains("arm")) return jrDelete(b.dataset.id);
+    b.classList.add("arm"), (b.textContent = "Точно удалить?"), setTimeout(() => b.isConnected && (b.classList.remove("arm"), (b.textContent = "Удалить")), 3e3);
+  });
+  (jr.entries = jrLoadLocal()), jrRender(), jrConnect();
   D("refToggle").onclick = () => ((M.ref.on = !M.ref.on), qt(), refSync());
   D("refClose").onclick = () => ((M.ref.on = !1), qt(), refSync());
   D("refPrev").onclick = () => refSet(M.ref.seed > 1 ? M.ref.seed - 1 : 999999);
