@@ -412,6 +412,8 @@ try {
   await page.waitForFunction(() => window.perspectiveChecker.state.strokes.length >= 12, null, { timeout: 15000 }).catch(() => {});
   await waitAnalysis(page);
   ok((await nStrokes()) >= 12 && /1 коробка/.test(await status(page)), `скриншот на сером фоне с соседним рисунком: линий ${await nStrokes()}, ${await status(page)}`);
+  const grade = await page.evaluate(() => window.perspectiveChecker.state.result?.boxes[0]?.diag.score?.grade);
+  ok(grade !== "проверка неполная" && /не проверяю/.test(await page.locator("#shotMsg").textContent()), `обрывки за краем кадра убраны, проверка полная (${grade})`);
   // пустая картинка и текст в буфере — понятные сообщения, рисунок не трогаем
   const nBefore = await nStrokes();
   await pasteImg(await shotOf(null));

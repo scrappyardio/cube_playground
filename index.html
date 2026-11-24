@@ -3655,7 +3655,7 @@ var Vectorize = (() => {
     const minLen = Math.max(2.5, 0.8 * sw); // штрих пунктира короче своей ширины на скелете
     edges = edges.filter((e) => plen(e.pts) >= minLen || (e.a >= 0 && deg.get(e.a) >= 3) || (e.b >= 0 && deg.get(e.b) >= 3));
     if (edges.length > 700) return { error: "busy", strokes: [] };
-    const strokes = [];
+    let strokes = [];
     for (const e of edges) {
       // конец «ножки» буквы T уже лежит на пересекаемой линии — его не трогаем
       const isJ = (n) => n >= 0 && deg.get(n) >= 3,
@@ -3674,9 +3674,36 @@ var Vectorize = (() => {
       });
     }
     if (!strokes.length) return { error: "empty", strokes: [] };
+    // Линии, уходящие за край кадра, — обрывки соседних рисунков: их не проверить, а в оценке они
+    // давали «проверка неполная». Убираем их и короткие кусочки, которые держатся только за них.
+    // Если после этого рисунка почти не остаётся (куб обрезан впритык), ничего не убираем.
+    let cut = 0;
+    {
+      const IW = W * f,
+        IH = H * f,
+        band = Math.max(4, 1.5 * sw * f),
+        near = 3 * sw * f + 3,
+        off = (s) => s.some((p) => p[0] < band || p[1] < band || p[0] > IW - band || p[1] > IH - band),
+        drop = strokes.map(off),
+        d2 = (p, q) => Math.hypot(p[0] - q[0], p[1] - q[1]),
+        touches = (p, set) => set.some((s) => s.some((q) => d2(p, q) < near)),
+        diag = Math.hypot(IW, IH);
+      for (let round = 0; round < 3; round++) {
+        const gone = strokes.filter((_, i) => drop[i]);
+        strokes.forEach((s, i) => {
+          if (drop[i] || plen(s) > 0.3 * diag) return;
+          const kept = strokes.filter((_, j) => !drop[j] && j !== i),
+            ends = [s[0], s[s.length - 1]];
+          // один конец держится за обрывок, другой ни к чему из рисунка не прикреплён
+          if (ends.some((p) => touches(p, gone)) && ends.every((p) => !touches(p, kept) || touches(p, gone))) drop[i] = !0;
+        });
+      }
+      const rest = strokes.filter((_, i) => !drop[i]);
+      if (rest.length >= 6 && rest.length < strokes.length) (cut = strokes.length - rest.length), (strokes = rest);
+    }
     let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
     for (const s of strokes) for (const p of s) (x0 = Math.min(x0, p[0])), (y0 = Math.min(y0, p[1])), (x1 = Math.max(x1, p[0])), (y1 = Math.max(y1, p[1]));
-    return { strokes, bbox: [x0, y0, x1, y1], strokeWidth: sw * f, inverted, threshold: T, scale: f };
+    return { strokes, cut, bbox: [x0, y0, x1, y1], strokeWidth: sw * f, inverted, threshold: T, scale: f };
   }
 
   // Размещение на листе: рисунок по центру, с полями. Возвращает штрихи в координатах листа и рамку картинки.
@@ -8028,7 +8055,7 @@ if (typeof self !== "undefined") self.Vectorize = Vectorize;
         Bt(),
         we(),
         shotShow(
-          `Распознано линий: ${pl.strokes.length}. Серое — твоя картинка, тёмное — как я её прочитал. Если что-то прочитано не так, сотри ластиком или дорисуй; ${isMac ? "⌘Z" : "Ctrl+Z"} — вернуть прежний рисунок.`,
+          `Распознано линий: ${pl.strokes.length}. Серое — твоя картинка, тёмное — как я её прочитал.${v.cut ? ` Линии, уходящие за край картинки (обрывки соседних рисунков), не проверяю — их ${v.cut}.` : ""} Если что-то прочитано не так, сотри ластиком или дорисуй; ${isMac ? "⌘Z" : "Ctrl+Z"} — вернуть прежний рисунок.`,
           12e3,
         ),
         v.strokeWidth / Math.max(v.bbox[2] - v.bbox[0], v.bbox[3] - v.bbox[1], 1) > 0.022 &&
