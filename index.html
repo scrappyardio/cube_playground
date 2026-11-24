@@ -3604,10 +3604,19 @@ var Vectorize = (() => {
     // Что оставить: крупные области — сам рисунок; мелкие — только рядом с ним (пунктир), без пылинок.
     const diagImg = Math.hypot(W, H),
       big = comps.filter((c) => Math.hypot(c.x1 - c.x0, c.y1 - c.y0) >= 0.04 * diagImg),
-      frame = (c) =>
-        (c.x0 <= 2 || c.y0 <= 2 || c.x1 >= W - 3 || c.y1 >= H - 3) &&
-        (c.x1 - c.x0 > 0.85 * W || c.y1 - c.y0 > 0.85 * H) &&
-        c.area < 0.02 * W * H + 4 * (W + H) * Math.max(1, sw);
+      // Рамка окна — линия, которая почти вся идёт вдоль края картинки. Рисунок, который просто
+      // касается края (соседние линии уходят за кадр), рамкой не считаем.
+      edgeBand = Math.max(5, 2 * sw + 2),
+      frame = (c) => {
+        if (!(c.x0 <= 2 || c.y0 <= 2 || c.x1 >= W - 3 || c.y1 >= H - 3)) return !1;
+        let n = 0;
+        for (const p of c.px) {
+          const x = p % W,
+            y = (p / W) | 0;
+          if (x < edgeBand || y < edgeBand || x >= W - edgeBand || y >= H - edgeBand) n++;
+        }
+        return n > 0.6 * c.area;
+      };
     let main = big.filter((c) => !frame(c));
     if (!main.length) main = comps.filter((c) => !frame(c)).sort((a, b) => b.area - a.area).slice(0, 1);
     if (!main.length) return { error: "empty", strokes: [] };

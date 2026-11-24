@@ -406,6 +406,12 @@ try {
   await waitAnalysis(page);
   sc = await boxScore();
   ok(sc >= 85 && (await page.locator("#drop").isHidden()), `перетаскивание, тёмная тема: балл ${sc}`);
+  // настоящий скриншот пользователя: серый фон, рядом обрывки соседнего рисунка, уходящие за край кадра
+  // (раньше всё это принималось за рамку окна и выбрасывалось: «Не нашёл линий»)
+  await page.setInputFiles("#shotIn", path.join(root, "tests/fixtures/user-box-gray.png"));
+  await page.waitForFunction(() => window.perspectiveChecker.state.strokes.length >= 12, null, { timeout: 15000 }).catch(() => {});
+  await waitAnalysis(page);
+  ok((await nStrokes()) >= 12 && /1 коробка/.test(await status(page)), `скриншот на сером фоне с соседним рисунком: линий ${await nStrokes()}, ${await status(page)}`);
   // пустая картинка и текст в буфере — понятные сообщения, рисунок не трогаем
   const nBefore = await nStrokes();
   await pasteImg(await shotOf(null));
