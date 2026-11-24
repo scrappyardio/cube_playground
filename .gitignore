@@ -2,3 +2,4 @@ node_modules/
 bench/last.json
 .DS_Store
 dist/
+bench/last_vec.json

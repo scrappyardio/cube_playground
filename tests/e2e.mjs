@@ -348,6 +348,104 @@ try {
   ok(errors.length === 0, "ошибок в консоли нет" + (errors.length ? ": " + errors.join(" | ") : ""));
   await ctx.close();
 
+  // 9ж. Скриншот на проверку: картинка → распознанные линии → обычная проверка
+  console.log("Скриншот");
+  ({ ctx, page, errors } = await openPage(browser, { storage: "" }));
+  // рисует случай стенда в картинку прямо в браузере и возвращает PNG (dataURL)
+  const shotOf = (c, o = {}) =>
+    page.evaluate(({ strokes, o }) => {
+      const cv = document.createElement("canvas");
+      (cv.width = o.w || 900), (cv.height = o.h || 560);
+      const g = cv.getContext("2d");
+      (g.fillStyle = o.bg || "#fff"), g.fillRect(0, 0, cv.width, cv.height);
+      (g.strokeStyle = o.ink || "#222"), (g.lineWidth = o.lw || 3), (g.lineCap = "round"), (g.lineJoin = "round");
+      for (const s of strokes || []) {
+        g.setLineDash(s.hidden ? [8, 6] : []);
+        g.beginPath();
+        s.pts.forEach((p, i) => (i ? g.lineTo(p[0] * 0.56, p[1] * 0.56) : g.moveTo(p[0] * 0.56, p[1] * 0.56)));
+        g.stroke();
+      }
+      return cv.toDataURL("image/png");
+    }, { strokes: c && c.strokes, o });
+  const pasteImg = (dataUrl) =>
+    page.evaluate(async (u) => {
+      const b = await (await fetch(u)).blob(), dt = new DataTransfer();
+      dt.items.add(new File([b], "shot.png", { type: "image/png" }));
+      document.dispatchEvent(new ClipboardEvent("paste", { clipboardData: dt, bubbles: true }));
+    }, dataUrl);
+  const boxScore = () => page.evaluate(() => window.perspectiveChecker.state.result?.boxes[0]?.diag.score?.total ?? null);
+  const nStrokes = () => page.evaluate(() => window.perspectiveChecker.state.strokes.length);
+  const prevSheet = await page.evaluate(() => JSON.stringify(window.perspectiveChecker.state.strokes));
+  await pasteImg(await shotOf(makeCase("ok_cube_dashed", 3)));
+  await page.waitForFunction(() => window.perspectiveChecker.state.strokes.length > 5, null, { timeout: 15000 });
+  await waitAnalysis(page);
+  let sc = await boxScore();
+  ok(/1 коробка/.test(await status(page)) && sc >= 85, `правильный куб со скриншота (⌘V): ${await status(page)}, балл ${sc}`);
+  ok(await page.locator("#shot").isVisible(), "подсказка, что распознано: " + (await page.locator("#shotMsg").textContent()).slice(0, 60));
+  ok(await page.evaluate(() => !!window.perspectiveChecker.state.underlay && !!window.perspectiveChecker.state.underlayRect), "картинка лежит подложкой");
+  if (shots) await page.screenshot({ path: path.join(shots, "9-shot.png") });
+  await page.keyboard.press("Control+z");
+  ok((await page.evaluate(() => JSON.stringify(window.perspectiveChecker.state.strokes))) === prevSheet, "⌘Z возвращает прежний рисунок");
+  // файл через «Выбрать файл…»: куб с ошибкой — ошибка находится
+  const bad = await shotOf(makeCase("bad_corner_big", 2));
+  await page.setInputFiles("#shotIn", { name: "bad.png", mimeType: "image/png", buffer: Buffer.from(bad.split(",")[1], "base64") });
+  await page.waitForFunction(() => window.perspectiveChecker.state.strokes.length > 5, null, { timeout: 15000 });
+  await waitAnalysis(page);
+  sc = await boxScore();
+  ok(sc !== null && sc < 70, `куб с ошибкой из файла: балл ${sc}`);
+  // перетаскивание файла на лист, светлые линии на тёмном фоне
+  const dark = await shotOf(makeCase("ok_cube", 4), { bg: "#202024", ink: "#e8e8ea" });
+  await page.evaluate(async (u) => {
+    const b = await (await fetch(u)).blob(), dt = new DataTransfer();
+    dt.items.add(new File([b], "d.png", { type: "image/png" }));
+    const st = document.getElementById("stage");
+    st.dispatchEvent(new DragEvent("dragenter", { dataTransfer: dt, bubbles: true, cancelable: true }));
+    st.dispatchEvent(new DragEvent("drop", { dataTransfer: dt, bubbles: true, cancelable: true }));
+  }, dark);
+  await page.waitForTimeout(300);
+  await waitAnalysis(page);
+  sc = await boxScore();
+  ok(sc >= 85 && (await page.locator("#drop").isHidden()), `перетаскивание, тёмная тема: балл ${sc}`);
+  // пустая картинка и текст в буфере — понятные сообщения, рисунок не трогаем
+  const nBefore = await nStrokes();
+  await pasteImg(await shotOf(null));
+  await page.waitForFunction(() => /Не нашёл/.test(document.getElementById("shotMsg").textContent), null, { timeout: 10000 });
+  ok((await nStrokes()) === nBefore, "пустая картинка: «Не нашёл линий», рисунок цел");
+  await page.evaluate(() => {
+    const dt = new DataTransfer();
+    dt.setData("text/plain", "привет");
+    document.dispatchEvent(new ClipboardEvent("paste", { clipboardData: dt, bubbles: true }));
+  });
+  ok(/текст/.test(await page.locator("#shotMsg").textContent()), "текст в буфере: подсказка снять картинку");
+  // кнопка без доступа к буферу — подсказка про ⌘V / файл
+  await page.click("#shotClose");
+  await page.click("#pasteBtn");
+  await page.waitForFunction(() => !document.getElementById("shot").hidden, null, { timeout: 10000 });
+  ok(/V/.test(await page.locator("#shotMsg").textContent()), "кнопка «Скриншот»: " + (await page.locator("#shotMsg").textContent()).slice(0, 70));
+  ok(errors.length === 0, "ошибок в консоли нет" + (errors.length ? ": " + errors.join(" | ") : ""));
+  await ctx.close();
+  // кнопка с разрешённым буфером обмена — картинка читается прямо из него
+  ({ ctx, page, errors } = await openPage(browser, { storage: "" }));
+  await ctx.grantPermissions(["clipboard-read", "clipboard-write"]).catch(() => {});
+  const wrote = await page.evaluate(async (u) => {
+    try {
+      const b = await (await fetch(u)).blob();
+      await navigator.clipboard.write([new ClipboardItem({ "image/png": b })]);
+      return true;
+    } catch (e) {
+      return String(e);
+    }
+  }, await shotOf(makeCase("ok_cube", 5)));
+  if (wrote === true) {
+    await page.click("#pasteBtn");
+    await page.waitForFunction(() => window.perspectiveChecker.state.strokes.length > 5, null, { timeout: 15000 }).catch(() => {});
+    await waitAnalysis(page);
+    sc = await boxScore();
+    ok(sc >= 85, `кнопка «Скриншот» читает буфер обмена: балл ${sc}`);
+  } else console.log("  · буфер обмена в этом браузере недоступен: " + wrote);
+  ok(errors.length === 0, "ошибок в консоли нет" + (errors.length ? ": " + errors.join(" | ") : ""));
+  await ctx.close();
+
   // 10. Без Web Worker анализ идёт в основном потоке тем же кодом
   console.log("Запасной режим без Worker");
   ({ ctx, page, errors } = await openPage(browser, { noWorker: true, storage: "" }));

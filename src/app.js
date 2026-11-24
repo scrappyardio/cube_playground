@@ -2446,6 +2446,7 @@
       hint: 0,
       underlay: null,
       underlayA: 0.5,
+      underlayRect: null,
       example: !1,
       undo: [],
       redo: [],
@@ -3547,8 +3548,9 @@
         u = l.height * i,
         ca = Math.cos(M.view.a) * M.view.s * jt,
         sa = Math.sin(M.view.a) * M.view.s * jt;
+      let ur = M.underlayRect || { x: (F.w - h) / 2, y: (F.h - u) / 2, w: h, h: u };
       A.setTransform(ca, sa, -sa, ca, M.view.ox * jt, M.view.oy * jt),
-        A.drawImage(l, (F.w - h) / 2, (F.h - u) / 2, h, u),
+        A.drawImage(l, ur.x, ur.y, ur.w, ur.h),
         A.setTransform(jt, 0, 0, jt, 0, 0),
         (A.globalAlpha = 1);
     }
@@ -4226,13 +4228,161 @@
     if (!e) return;
     let n = new Image();
     (n.onload = () => {
-      (M.underlay = n), (D("underlayA").hidden = !1), O();
+      (M.underlay = n), (M.underlayRect = null), (D("underlayA").hidden = !1), O();
     }),
       (n.src = URL.createObjectURL(e));
   });
   D("underlayA").addEventListener("input", (t) => {
     (M.underlayA = +t.target.value), O();
   });
+  // ---- Скриншот на проверку: картинка из буфера обмена, файла или перетаскиванием → штрихи на листе ----
+  var shotBusy = !1,
+    shotTimer = 0,
+    isMac = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent || ""),
+    kPaste = isMac ? "<kbd>⌘V</kbd>" : "<kbd>Ctrl+V</kbd>",
+    kShot = isMac ? "<kbd>⌃⇧⌘4</kbd>" : "<kbd>Win+Shift+S</kbd>";
+  function shotShow(html, ms) {
+    clearTimeout(shotTimer), (D("shotMsg").innerHTML = html), (D("shot").hidden = !1);
+    ms && (shotTimer = setTimeout(shotHide, ms));
+  }
+  function shotHide() {
+    clearTimeout(shotTimer), (D("shot").hidden = !0);
+  }
+  async function pasteShot() {
+    if (navigator.clipboard && navigator.clipboard.read)
+      try {
+        let items = await navigator.clipboard.read();
+        for (let it of items) {
+          let t = it.types.find((x) => x.startsWith("image/"));
+          if (t) return importShot(await it.getType(t));
+        }
+        return shotShow(
+          `В буфере обмена нет картинки. Сними рисунок в буфер (${kShot}) и нажми «Скриншот» ещё раз или ${kPaste}. Можно и перетащить файл на лист.`,
+        );
+      } catch {}
+    // браузер не дал прочитать буфер из кнопки — вставка сочетанием клавиш работает всегда
+    shotShow(`Нажми ${kPaste}, чтобы вставить скриншот, перетащи картинку на лист или выбери файл.`);
+  }
+  async function loadBitmap(blob) {
+    if (window.createImageBitmap)
+      try {
+        return await createImageBitmap(blob);
+      } catch {}
+    return await new Promise((res, rej) => {
+      let i = new Image(),
+        u = URL.createObjectURL(blob);
+      (i.onload = () => (URL.revokeObjectURL(u), res(i))), (i.onerror = rej), (i.src = u);
+    });
+  }
+  async function importShot(blob) {
+    if (!blob || shotBusy) return;
+    if (blob.type && !blob.type.startsWith("image/"))
+      return shotShow("Это не картинка. Нужен скриншот или фото рисунка (PNG, JPG, HEIC не подойдёт).");
+    shotBusy = !0;
+    shotShow("Распознаю линии на картинке…");
+    try {
+      let img;
+      try {
+        img = await loadBitmap(blob);
+      } catch {
+        return shotShow("Не получилось открыть картинку. Подойдёт PNG или JPG.");
+      }
+      let w = img.width,
+        h = img.height,
+        sc = Math.min(1, 1600 / Math.max(w, h));
+      Math.max(w, h) < 500 && (sc = Math.min(3, 700 / Math.max(w, h)));
+      let cw = Math.max(1, Math.round(w * sc)),
+        ch = Math.max(1, Math.round(h * sc)),
+        cv = document.createElement("canvas");
+      (cv.width = cw), (cv.height = ch);
+      let g = cv.getContext("2d", { willReadFrequently: !0 });
+      (g.imageSmoothingQuality = "high"), g.drawImage(img, 0, 0, cw, ch);
+      img.close && img.close();
+      let data = g.getImageData(0, 0, cw, ch);
+      await new Promise((r) => setTimeout(r, 30)); // дать показаться «распознаю…»
+      let v = Vectorize.vectorize(data);
+      if (v.error)
+        return shotShow(
+          v.error === "busy"
+            ? "На картинке слишком много всего. Обрежь скриншот так, чтобы в нём остался только рисунок куба."
+            : v.error === "small"
+              ? "Картинка слишком маленькая."
+              : "Не нашёл на картинке линий. Нужен рисунок тёмными линиями на светлом фоне (или светлыми на тёмном).",
+        );
+      let pl = Vectorize.place(v, data, F);
+      M.mode !== "free" && $e("free", !0);
+      Qt();
+      (M.strokes = pl.strokes),
+        (M.underlay = cv),
+        (M.underlayRect = pl.rect),
+        (M.underlayA = 0.3),
+        (D("underlayA").value = "0.3"),
+        (D("underlayA").hidden = !1),
+        M.layers.mine || ((M.layers.mine = !0), te()),
+        (M.result = null),
+        (M.hl = null),
+        Bt(),
+        we(),
+        shotShow(
+          `Распознано линий: ${pl.strokes.length}. Серое — твоя картинка, тёмное — как я её прочитал. Если что-то прочитано не так, сотри ластиком или дорисуй; ${isMac ? "⌘Z" : "Ctrl+Z"} — вернуть прежний рисунок.`,
+          12e3,
+        ),
+        v.strokeWidth / Math.max(v.bbox[2] - v.bbox[0], v.bbox[3] - v.bbox[1], 1) > 0.022 &&
+          shotShow(
+            `Распознано линий: ${pl.strokes.length}. Линии очень толстые для такого размера рисунка — углы читаются неточно, и оценка может ошибаться. Для проверки лучше тонкая линия или рисунок крупнее.`,
+            15e3,
+          ),
+        pl.strokes.length > 60 &&
+          shotShow(
+            `Распознано линий: ${pl.strokes.length} — похоже, на картинке есть лишнее (текст, рамки, штриховка). Обрежь скриншот до куба или сотри лишнее ластиком.`,
+            15e3,
+          );
+    } catch (e) {
+      shotShow("Не получилось распознать картинку: " + de(String((e && e.message) || e)));
+    } finally {
+      shotBusy = !1;
+    }
+  }
+  D("pasteBtn").onclick = pasteShot;
+  D("shotClose").onclick = shotHide;
+  D("shotIn").addEventListener("change", (e) => {
+    let f = e.target.files && e.target.files[0];
+    f && importShot(f), (e.target.value = "");
+  });
+  document.addEventListener("paste", (e) => {
+    if (D("journal").open) return;
+    let items = [...((e.clipboardData && e.clipboardData.items) || [])],
+      it = items.find((i) => i.kind === "file" && i.type.startsWith("image/"));
+    if (!it) {
+      let el = e.target;
+      // текст вставляют в поле seed — не мешаем; в остальных местах подскажем, что нужна картинка
+      el && el.tagName === "INPUT"
+        ? 0
+        : items.length && shotShow(`В буфере обмена текст, а не картинка. Сними рисунок в буфер (${kShot}) и вставь ${kPaste}.`, 8e3);
+      return;
+    }
+    e.preventDefault(), importShot(it.getAsFile());
+  });
+  {
+    let depth = 0,
+      hasFile = (e) => e.dataTransfer && [...(e.dataTransfer.types || [])].includes("Files"),
+      st = D("stage");
+    st.addEventListener("dragenter", (e) => {
+      hasFile(e) && (e.preventDefault(), depth++, (D("drop").hidden = !1));
+    });
+    st.addEventListener("dragover", (e) => {
+      hasFile(e) && (e.preventDefault(), (e.dataTransfer.dropEffect = "copy"));
+    });
+    st.addEventListener("dragleave", () => {
+      --depth <= 0 && ((depth = 0), (D("drop").hidden = !0));
+    });
+    st.addEventListener("drop", (e) => {
+      if (!hasFile(e)) return;
+      e.preventDefault(), (depth = 0), (D("drop").hidden = !0);
+      let f = [...e.dataTransfer.files].find((f) => f.type.startsWith("image/")) || e.dataTransfer.files[0];
+      importShot(f);
+    });
+  }
   new ResizeObserver(ye).observe(D("stage"));
   matchMedia("(prefers-color-scheme: dark)").addEventListener?.("change", () => {
     ve(), O(), Lt(), drawRef();

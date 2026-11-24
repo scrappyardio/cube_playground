@@ -127,6 +127,12 @@ h1 { font-size: 19px; line-height: 1.1; margin: 0; font-weight: 700; letter-spac
 #refSeed { width: 0; flex: 1; min-width: 56px; font: 12.5px var(--mono); border: 1px solid var(--line); border-radius: 7px; padding: 3px 6px; background: var(--paper) }
 .ref-note { margin: 6px 0 0; font-size: 11.5px; color: var(--faint); line-height: 1.35 }
 .stage.has-ref .badge { max-width: calc(100% - 276px) }
+.shot { position: absolute; left: 50%; top: 56px; transform: translateX(-50%); width: min(380px, calc(100% - 20px)); background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 8px 10px 10px; box-shadow: 0 2px 10px color-mix(in srgb, var(--ink) 12%, transparent); z-index: 3 }
+.shot-msg { margin: 2px 0 8px; font-size: 13px; line-height: 1.45; color: var(--ink) }
+.shot-msg kbd { font: inherit; font-size: 12px; border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 5px; padding: 0 5px; background: var(--paper) }
+.shot-file { border: 1px solid var(--line) !important; background: var(--surface) !important; font-size: 12.5px !important; padding: 4px 10px !important }
+.drop { position: absolute; inset: 0; display: grid; place-items: center; background: color-mix(in srgb, var(--surface) 70%, transparent); border: 2px dashed var(--muted); border-radius: var(--r); font-size: 15px; color: var(--ink); pointer-events: none; z-index: 4 }
+.drop span { background: var(--surface); padding: 8px 14px; border-radius: 8px; border: 1px solid var(--line) }
 @media (max-width: 900px) {
   .ref { width: 184px; padding: 6px }
   .ref-note, .ref-row label { display: none }
@@ -241,14 +247,15 @@ h1 { font-size: 19px; line-height: 1.1; margin: 0; font-weight: 700; letter-spac
       <div><h3>Как рисовать</h3>
         <p>Рёбра — прямыми штрихами, соединяй их в углах. Можно рисовать каждое ребро отдельно или обводить угол одним движением; можно продлевать линии за углы. Невидимые рёбра рисуй пером «Невидимое» или пунктиром. Для каждого направления нужно хотя бы 3 ребра, иначе сходимость не проверить.</p>
         <p>Кнопка «Образец» показывает случайный куб (или коробку) для срисовки; номер seed задаёт образец, им можно делиться. Образец в проверке не участвует.</p>
-        <p>На одном листе можно нарисовать несколько коробок: тогда проверяется ещё и то, что все они видны одним глазом. Бумажный рисунок можно положить подложкой и обвести.</p></div>
+        <p>На одном листе можно нарисовать несколько коробок: тогда проверяется ещё и то, что все они видны одним глазом. Бумажный рисунок можно положить подложкой и обвести.</p>
+        <p>Рисунок из другой программы или фото листа можно проверить сразу: сними его в буфер обмена (<kbd>⌃⇧⌘4</kbd> на Mac) и нажми «Скриншот» или <kbd>⌘V</kbd>; можно и перетащить файл на лист. Линии распознаются автоматически, картинка остаётся бледной подложкой; неверно прочитанное поправь ластиком. Лучше всего читаются тёмные линии на светлом фоне без лишнего вокруг куба.</p></div>
       <div><h3>Как нарисовать пропорциональный куб</h3>
         <p>1. Начни с ближнего угла и трёх рёбер из него — буквы «Y». Все три угла между ними больше 90°. Дальше каждое ребро веди к той же точке схода, что и параллельное ему.</p>
         <p>2. Чем круче ребро уходит от тебя вглубь, тем короче оно на рисунке. Но при обычном взгляде грань-квадрат сжимается не в разы: если одна сторона грани вдвое длиннее другой, скорее всего, ошибка.</p>
         <p>3. Нажми «Проверить пропорции» над отчётом: на трёх рёбрах от ближнего угла появятся отметки, где они должны кончаться, с процентом расхождения. Слой «Мерка пропорций» (<kbd>G</kbd>) показывает такие отметки сам, когда пропорции заметно не кубические. От твоего ближнего угла по твоим же направлениям строится настоящий куб; зелёные отметки показывают, где должны кончаться рёбра, стрелки — куда сдвинуть дальние углы. В отчёте «Пропорции» видно, какая грань вытянута.</p>
         <p>4. Хочешь тренироваться — включи «Образец» и срисовывай.</p></div>
       <div><h3>Клавиши</h3>
-        <p class="keys"><kbd>B</kbd> карандаш <kbd>L</kbd> прямая <kbd>D</kbd> невидимое ребро <kbd>E</kbd> ластик <kbd>Shift</kbd> прямая линия карандашом<br><kbd>⌘Z</kbd>/<kbd>Ctrl+Z</kbd> отменить, <kbd>⇧⌘Z</kbd>/<kbd>Ctrl+Y</kbd> вернуть<br><kbd>R</kbd> повернуть лист на 90° (<kbd>Shift+R</kbd> — в другую сторону)<br><kbd>G</kbd> мерка пропорций <kbd>Space</kbd> правильный куб <kbd>T</kbd> лучи к точкам схода <kbd>H</kbd> горизонт <kbd>F</kbd> вписать лист <kbd>V</kbd> показать точки схода<br>Колесо — масштаб, перетаскивание правой кнопкой или двумя пальцами — сдвиг.</p></div>
+        <p class="keys"><kbd>B</kbd> карандаш <kbd>L</kbd> прямая <kbd>D</kbd> невидимое ребро <kbd>E</kbd> ластик <kbd>Shift</kbd> прямая линия карандашом<br><kbd>⌘Z</kbd>/<kbd>Ctrl+Z</kbd> отменить, <kbd>⇧⌘Z</kbd>/<kbd>Ctrl+Y</kbd> вернуть<br><kbd>⌘V</kbd>/<kbd>Ctrl+V</kbd> вставить скриншот на проверку<br><kbd>R</kbd> повернуть лист на 90° (<kbd>Shift+R</kbd> — в другую сторону)<br><kbd>G</kbd> мерка пропорций <kbd>Space</kbd> правильный куб <kbd>T</kbd> лучи к точкам схода <kbd>H</kbd> горизонт <kbd>F</kbd> вписать лист <kbd>V</kbd> показать точки схода<br>Колесо — масштаб, перетаскивание правой кнопкой или двумя пальцами — сдвиг.</p></div>
     </div>
   </section>
 
@@ -272,6 +279,7 @@ h1 { font-size: 19px; line-height: 1.1; margin: 0; font-weight: 700; letter-spac
         </div>
         <div class="grp">
           <button id="refToggle" aria-pressed="false" title="Показать образец для срисовки"><svg viewBox="0 0 20 20"><path d="M4 7l6-3 6 3v7l-6 3-6-3z M4 7l6 3 6-3 M10 10v7" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg><span>Образец</span></button>
+          <button id="pasteBtn" title="Проверить скриншот или фото рисунка из буфера обмена (⌘V)"><svg viewBox="0 0 20 20"><path d="M7 4H5.5A1.5 1.5 0 004 5.5v11A1.5 1.5 0 005.5 18h9a1.5 1.5 0 001.5-1.5v-11A1.5 1.5 0 0014.5 4H13 M7.5 2.8h5v2.6h-5z M7 10.5l3 3 3-3 M10 7.5v6" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg><span>Скриншот</span></button>
           <label class="file" title="Положить фото бумажного рисунка под холст и обвести"><input type="file" id="underlayIn" accept="image/*"><span>Подложка</span></label>
           <input type="range" id="underlayA" min="0" max="1" step="0.05" value="0.5" aria-label="Прозрачность подложки" hidden>
         </div>
@@ -290,6 +298,12 @@ h1 { font-size: 19px; line-height: 1.1; margin: 0; font-weight: 700; letter-spac
           </div>
           <p class="ref-note">Только для срисовки: проверяется твой рисунок, а не сходство с образцом.</p>
         </section>
+        <section class="shot" id="shot" aria-label="Вставка картинки" hidden>
+          <div class="ref-head"><b>Скриншот на проверку</b><button class="x" id="shotClose" title="Закрыть" aria-label="Закрыть">×</button></div>
+          <p class="shot-msg" id="shotMsg"></p>
+          <div class="ref-row"><label class="file shot-file"><input type="file" id="shotIn" accept="image/*"><span>Выбрать файл…</span></label></div>
+        </section>
+        <div class="drop" id="drop" hidden><span>Отпусти картинку — проверю рисунок на ней</span></div>
         <div class="zoom">
           <button id="rotSheet" title="Повернуть лист на 90° (R, Shift+R — обратно)" aria-label="Повернуть лист">↻ <span id="rotLabel"></span></button>
           <button id="fitPage" title="Вписать лист (F)">Лист</button>
