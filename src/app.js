@@ -3375,7 +3375,7 @@
     { passive: !1 },
   );
   window.addEventListener("keydown", (t) => {
-    if (D("journal").open) return;
+    if (D("journal").open || document.body.dataset.tab === "scene") return;
     if (t.target.tagName === "INPUT" && t.target.type !== "range" && t.target.type !== "file") return;
     let e = t.metaKey || t.ctrlKey,
       n = t.key.toLowerCase();
@@ -4350,7 +4350,7 @@
     f && importShot(f), (e.target.value = "");
   });
   document.addEventListener("paste", (e) => {
-    if (D("journal").open) return;
+    if (D("journal").open || document.body.dataset.tab === "scene") return;
     let items = [...((e.clipboardData && e.clipboardData.items) || [])],
       it = items.find((i) => i.kind === "file" && i.type.startsWith("image/"));
     if (!it) {

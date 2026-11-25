@@ -111,6 +111,27 @@ h1 { font-size: 19px; line-height: 1.1; margin: 0; font-weight: 700; letter-spac
 .jbtns button.del.arm { color: var(--bad); border-color: var(--bad) }
 .jempty { color: var(--muted); padding: 8px 0 }
 
+/* ---------- тренажёр: сцена ---------- */
+.tabs button { font-weight: 600 }
+body[data-tab="scene"] .check-only, body[data-tab="scene"] #help { display: none !important }
+.scenework { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 14px }
+#scCv { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; display: block; cursor: grab }
+#scCv.drag { cursor: grabbing }
+#scCv.hz { cursor: ns-resize }
+#scCv.obj { cursor: pointer }
+.scseed { width: 84px; border: 1px solid var(--line); border-radius: 6px; padding: 3px 6px; background: var(--paper); font: 13px var(--mono) }
+.hrange, .orange { width: 100%; accent-color: var(--horizon); margin: 2px 0 0 }
+.orange { accent-color: var(--ink) }
+.rlabels { display: flex; justify-content: space-between; font-size: 11.5px; color: var(--faint) }
+.scinfo { margin: 8px 0 0; font-size: 13px; line-height: 1.45 }
+.card h2.sc2 { margin-top: 16px }
+.tips { margin: 0; padding-left: 18px; display: grid; gap: 6px; font-size: 13px; color: var(--muted) }
+.tips b { color: var(--ink); font-weight: 600 }
+@media (max-width: 900px) {
+  .scenework { grid-template-columns: minmax(0, 1fr) }
+  #sceneTab .stage { flex: none; height: 62vh; min-height: 340px }
+}
+
 /* ---------- образец для срисовки ---------- */
 .ref { position: absolute; right: 10px; top: 10px; width: 240px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 8px; box-shadow: 0 2px 10px color-mix(in srgb, var(--ink) 10%, transparent) }
 .ref.big { width: min(400px, calc(100% - 20px)) }
@@ -225,18 +246,22 @@ h1 { font-size: 19px; line-height: 1.1; margin: 0; font-weight: 700; letter-spac
       <svg class="logo" viewBox="0 0 32 32" aria-hidden="true"><path d="M4 26 L16 6 L28 26" fill="none" stroke="currentColor" stroke-width="2"/><path d="M9 26 L16 14 L23 26 M4 26 H28" fill="none" stroke="currentColor" stroke-width="1.4" opacity=".55"/><circle cx="16" cy="6" r="2.4" fill="var(--fam1)"/></svg>
       <div><h1>Перспектива</h1><p class="tag">проверка нарисованных кубов и коробок</p></div>
     </div>
-    <div class="seg" role="group" aria-label="Задание">
+    <div class="seg tabs" role="tablist" aria-label="Раздел">
+      <button id="tabCheck" role="tab" aria-pressed="true" aria-selected="true" title="Нарисовать куб и проверить его">Проверка</button>
+      <button id="tabScene" role="tab" aria-pressed="false" aria-selected="false" title="Тренажёр: сцена из предметов с линиями к горизонту">Сцена</button>
+    </div>
+    <div class="seg check-only" role="group" aria-label="Задание">
       <button id="mFree" aria-pressed="true">Свободный рисунок</button>
       <button id="mFace" aria-pressed="false">Достроить по грани</button>
     </div>
-    <div class="seg" role="group" aria-label="Что рисую">
+    <div class="seg check-only" role="group" aria-label="Что рисую">
       <button id="tCube" aria-pressed="true" title="Все рёбра равны: проверка пропорций включена">Куб</button>
       <button id="tBox" aria-pressed="false" title="Любые пропорции: проверяется только перспектива">Коробка</button>
     </div>
     <div class="spacer"></div>
-    <button id="journalBtn" class="ghost" title="Журнал прогресса: сохранённые рисунки и баллы">Журнал <span id="jCount" class="jcount"></span></button>
-    <button id="exampleBtn" class="ghost" title="Загрузить пример рисунка с ошибками">Пример</button>
-    <button id="helpBtn" class="ghost" aria-expanded="false">Как это работает</button>
+    <button id="journalBtn" class="ghost check-only" title="Журнал прогресса: сохранённые рисунки и баллы">Журнал <span id="jCount" class="jcount"></span></button>
+    <button id="exampleBtn" class="ghost check-only" title="Загрузить пример рисунка с ошибками">Пример</button>
+    <button id="helpBtn" class="ghost check-only" aria-expanded="false">Как это работает</button>
   </header>
 
   <section class="help" id="help" hidden>
@@ -332,6 +357,74 @@ h1 { font-size: 19px; line-height: 1.1; margin: 0; font-weight: 700; letter-spac
       <div id="reportBody" aria-live="polite"></div>
     </aside>
   </main>
+
+  <main class="scenework" id="sceneTab" hidden>
+    <section class="stagewrap">
+      <div class="toolbar" role="toolbar" aria-label="Сцена">
+        <div class="grp">
+          <button id="scNew" title="Новая случайная сцена (N)">🎲 <span>Новая сцена</span></button>
+          <button id="scPrev" class="icon" title="Предыдущая" aria-label="Предыдущая сцена">◀</button>
+          <input id="scSeed" class="scseed" type="number" min="1" max="999999" step="1" inputmode="numeric" aria-label="Номер сцены (seed)" title="Номер сцены: им можно поделиться">
+          <button id="scNext" class="icon" title="Следующая" aria-label="Следующая сцена">▶</button>
+        </div>
+        <div class="grp" role="group" aria-label="Расстановка">
+          <button data-lay="stack" title="Один столбик: предметы друг на друге">Стопка</button>
+          <button data-lay="row" title="Предметы стоят рядом на полу">Рядом</button>
+          <button data-lay="mix" title="Несколько стопок разной высоты">Вперемешку</button>
+        </div>
+        <div class="grp" role="group" aria-label="Предметы">
+          <button data-ty="cube">Кубы</button>
+          <button data-ty="box">Коробки</button>
+          <button data-ty="cyl">Цилиндры</button>
+          <button data-ty="disc">Диски</button>
+        </div>
+      </div>
+      <div class="stage" id="scStage">
+        <canvas id="scCv" aria-label="Сцена в перспективе"></canvas>
+        <div class="badge" id="scBadge"></div>
+        <div class="zoom">
+          <button id="scFit" title="Показать сцену целиком (F)">Сцена</button>
+          <button id="scFitVP" title="Показать все точки схода (V)">Точки схода</button>
+        </div>
+      </div>
+      <div class="layers" role="group" aria-label="Что показать">
+        <button id="scVP" class="chip" aria-pressed="true">Линии к точкам схода <kbd>T</kbd></button>
+        <button id="scHor" class="chip" aria-pressed="true">Горизонт <kbd>H</kbd></button>
+        <button id="scEll" class="chip" aria-pressed="false">Построение эллипсов <kbd>E</kbd></button>
+        <button id="scAxis" class="chip" aria-pressed="true">Оси цилиндров</button>
+        <button id="scHid" class="chip" aria-pressed="false">Насквозь <kbd>X</kbd></button>
+        <span class="status" id="scStatus"></span>
+      </div>
+    </section>
+    <aside class="report scpanel">
+      <section class="card">
+        <h2>Горизонт — уровень глаз</h2>
+        <input type="range" id="scH" class="hrange" min="0" max="1000" step="1" aria-label="Высота горизонта">
+        <div class="rlabels"><span>ниже: смотрю снизу</span><span>выше: смотрю сверху</span></div>
+        <p class="scinfo" id="scHInfo"></p>
+        <p class="small">Линию горизонта можно тащить прямо на сцене, или <kbd>↑</kbd> <kbd>↓</kbd>.</p>
+        <h2 class="sc2">Поворот сцены</h2>
+        <input type="range" id="scOrbit" class="orange" min="-180" max="180" step="1" aria-label="Поворот сцены">
+        <div class="rlabels"><span>←</span><span id="scOrbitVal">0°</span><span>→</span></div>
+        <h2 class="sc2">Предметы повёрнуты</h2>
+        <div class="seg" role="group" aria-label="Повороты предметов">
+          <button id="scRotFree" aria-pressed="true" title="У каждого предмета свои точки схода">по-разному</button>
+          <button id="scRotSame" aria-pressed="false" title="Все предметы повёрнуты одинаково: две общие точки схода">одинаково</button>
+        </div>
+      </section>
+      <section class="card">
+        <h2>Что увидеть</h2>
+        <ul class="tips">
+          <li>Горизонтальные рёбра каждого предмета сходятся в <b>две точки на линии горизонта</b>. Предмет повёрнут иначе — у него свои точки, но тоже на горизонте.</li>
+          <li>Вертикальные рёбра остаются вертикальными.</li>
+          <li>У предметов ниже уровня глаз виден верх, выше — низ. Грань на уровне глаз видна ребром, в линию.</li>
+          <li>Эллипсы тем уже, чем ближе к горизонту. Короткая ось эллипса идёт вдоль оси цилиндра.</li>
+          <li>«Построение эллипсов»: круг вписан в квадрат в перспективе. Центр круга — на пересечении диагоналей, он дальше середины эллипса.</li>
+        </ul>
+        <p class="small">Щёлкни по предмету — останутся только его линии. Щелчок по пустому месту — снова все. Колесо — масштаб, перетаскивание — сдвиг.</p>
+      </section>
+    </aside>
+  </main>
   <dialog class="jdlg" id="journal" aria-labelledby="jTitle">
     <div class="jhead">
       <h2 id="jTitle">Журнал прогресса</h2>
@@ -355,5 +448,6 @@ h1 { font-size: 19px; line-height: 1.1; margin: 0; font-weight: 700; letter-spac
 </div>
 <!--WORKER-->
 <!--APP-->
+<!--SCENE-->
 
 </body></html>

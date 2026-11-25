@@ -454,6 +454,75 @@ try {
   ok(errors.length === 0, "ошибок в консоли нет" + (errors.length ? ": " + errors.join(" | ") : ""));
   await ctx.close();
 
+  // 9з. Тренажёр «Сцена»: отдельная вкладка
+  console.log("Сцена");
+  ({ ctx, page, errors } = await openPage(browser, { storage: "" }));
+  await page.click("#tabScene");
+  await page.waitForTimeout(300);
+  ok((await page.locator("#sceneTab").isVisible()) && (await page.locator("main.work").isHidden()), "вкладка «Сцена» открывается, проверка скрыта");
+  ok(await page.evaluate(() => location.hash === "#scene"), "адрес вкладки: #scene");
+  const scn = () => page.evaluate(() => { const F = window.perspectiveScene.frame; return { n: F.objs.length, hy: F.hy, h: F.h, seed: window.perspectiveScene.state.seed, vpOnHorizon: F.objs.every((o) => [o.vps.u, o.vps.v].every((p) => !p || Math.abs(p[1] - F.hy) < 1e-6)) }; });
+  let s1 = await scn();
+  ok(s1.n >= 2 && s1.vpOnHorizon, `сцена из ${s1.n} предметов, все точки схода на горизонте`);
+  // горизонтальные рёбра коробок на картинке действительно проходят через свои точки схода
+  const vpErr = await page.evaluate(() => {
+    const F = window.perspectiveScene.frame; let worst = 0;
+    for (const o of F.objs) for (const l of o.lines || []) {
+      if (!l.dir || l.dir === "y") continue;
+      const vp = o.vps[l.dir]; if (!vp) continue;
+      const [p, q] = l.pts, cr = (q[0] - p[0]) * (vp[1] - p[1]) - (q[1] - p[1]) * (vp[0] - p[0]);
+      worst = Math.max(worst, Math.abs(cr) / Math.hypot(q[0] - p[0], q[1] - p[1]) / Math.hypot(vp[0] - p[0], vp[1] - p[1]));
+    }
+    return worst;
+  });
+  ok(vpErr < 1e-6, `рёбра лежат на прямых к точкам схода (отклонение ${vpErr.toExponential(1)})`);
+  await page.click("#scNew");
+  let b2 = await scn();
+  ok(b2.seed !== s1.seed, `«Новая сцена» меняет сцену: ${s1.seed} → ${b2.seed}`);
+  // тот же seed — та же сцена
+  const same = await page.evaluate(() => { const g = window.perspectiveScene.generate, st = window.perspectiveScene.state; return JSON.stringify(g(777, st.layout, st.types)) === JSON.stringify(g(777, st.layout, st.types)); });
+  ok(same, "одинаковый seed даёт одинаковую сцену");
+  // горизонт: ползунок и перетаскивание
+  await page.locator("#scH").fill("900");
+  let s3 = await scn();
+  ok(s3.h > b2.h && s3.hy < b2.hy, `ползунок поднимает горизонт: глаз ${b2.h.toFixed(2)} → ${s3.h.toFixed(2)}`);
+  await page.keyboard.press("ArrowDown");
+  ok((await scn()).h < s3.h, "↓ опускает горизонт");
+  const box2 = await page.locator("#scCv").boundingBox();
+  await page.click("#scFit"); // в кадре и сцена, и горизонт
+  const scrY = await page.evaluate(() => { const v = window.perspectiveScene.view; return v.oy + v.s * window.perspectiveScene.frame.hy; });
+  const before2 = await scn();
+  await page.mouse.move(box2.x + box2.width * 0.6, box2.y + scrY);
+  await page.mouse.down();
+  await page.mouse.move(box2.x + box2.width * 0.6, box2.y + scrY + 60, { steps: 5 });
+  await page.mouse.up();
+  const after2 = await scn();
+  ok(after2.h < before2.h, `горизонт тащится мышью вниз: глаз ${before2.h.toFixed(2)} → ${after2.h.toFixed(2)}`);
+  // переключатели и выбор предмета
+  for (const id of ["scVP", "scEll", "scHid", "scAxis", "scHor", "scRotSame", "scFitVP", "scFit"]) await page.click("#" + id);
+  for (const lay of ["stack", "row", "mix"]) await page.click(`#sceneTab [data-lay="${lay}"]`);
+  await page.click(`#sceneTab [data-ty="disc"]`);
+  ok(await page.evaluate(() => window.perspectiveScene.frame.objs.every((o) => o.type !== "disc")), "без дисков — дисков нет");
+  await page.click("#scFit");
+  await page.mouse.click(box2.x + 5, box2.y + box2.height - 5); // пустое место: выбор снят
+  ok(/предмет/.test(await page.locator("#scBadge").textContent()), "подпись сцены: " + (await page.locator("#scBadge").textContent()).slice(0, 60));
+  // клавиши проверки не срабатывают на вкладке «Сцена»
+  const rot0 = await page.evaluate(() => window.perspectiveChecker.state.rot);
+  await page.keyboard.press("r");
+  ok((await page.evaluate(() => window.perspectiveChecker.state.rot)) === rot0, "R на вкладке «Сцена» не поворачивает лист проверки");
+  if (shots) await page.screenshot({ path: path.join(shots, "10-scene.png") });
+  // обратно на проверку — всё работает; после перезагрузки открывается та вкладка, где были
+  await page.click("#tabCheck");
+  await page.click("#exampleBtn");
+  await waitAnalysis(page);
+  ok(/1 коробка/.test(await status(page)), "после «Сцены» проверка работает: " + (await status(page)));
+  await page.click("#tabScene");
+  await page.reload();
+  await page.waitForFunction(() => window.perspectiveScene);
+  ok(await page.locator("#sceneTab").isVisible(), "после перезагрузки открыта «Сцена»");
+  ok(errors.length === 0, "ошибок в консоли нет" + (errors.length ? ": " + errors.join(" | ") : ""));
+  await ctx.close();
+
   // 10. Без Web Worker анализ идёт в основном потоке тем же кодом
   console.log("Запасной режим без Worker");
   ({ ctx, page, errors } = await openPage(browser, { noWorker: true, storage: "" }));
@@ -480,6 +549,11 @@ try {
   await page.waitForTimeout(400);
   ok(errors.length === 0, "режим грани с поворотом без ошибок" + (errors.length ? ": " + errors.join(" | ") : ""));
   if (shots) await page.screenshot({ path: path.join(shots, "4-phone-face.png") });
+  await page.click("#tabScene");
+  await page.waitForTimeout(300);
+  const sw3 = await page.evaluate(() => document.documentElement.scrollWidth);
+  ok(sw3 <= 390 && (await page.locator("#scCv").isVisible()), `«Сцена» на телефоне без прокрутки вбок (ширина ${sw3})`);
+  if (shots) await page.screenshot({ path: path.join(shots, "11-phone-scene.png"), fullPage: true });
   await ctx.close();
 } finally {
   await browser.close();
