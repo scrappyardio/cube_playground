@@ -506,6 +506,46 @@ try {
   await page.click("#scFit");
   await page.mouse.click(box2.x + 5, box2.y + box2.height - 5); // пустое место: выбор снят
   ok(/предмет/.test(await page.locator("#scBadge").textContent()), "подпись сцены: " + (await page.locator("#scBadge").textContent()).slice(0, 60));
+  // свободная камера: наклон, третья точка схода, облёт мышью
+  await page.click("#scFree");
+  const fr = await page.evaluate(() => {
+    const F = window.perspectiveScene.frame; let worstV = 0, worstH = 0;
+    for (const o of F.objs) for (const l of o.lines || []) {
+      if (!l.dir) continue;
+      const vp = l.dir === "y" ? F.vpY : o.vps[l.dir]; if (!vp) continue;
+      const [p, q] = l.pts, cr = Math.abs((q[0] - p[0]) * (vp[1] - p[1]) - (q[1] - p[1]) * (vp[0] - p[0])) / Math.hypot(q[0] - p[0], q[1] - p[1]) / Math.hypot(vp[0] - p[0], vp[1] - p[1]);
+      l.dir === "y" ? (worstV = Math.max(worstV, cr)) : (worstH = Math.max(worstH, cr));
+    }
+    const onHz = F.objs.every((o) => [o.vps.u, o.vps.v].every((p) => !p || Math.abs(p[1] - F.hy) < 1e-6));
+    return { pitch: F.pitch, vpY: !!F.vpY, worstV, worstH, onHz };
+  });
+  ok(Math.abs(fr.pitch) > 0.05 && fr.vpY && fr.worstV < 1e-6 && fr.worstH < 1e-6 && fr.onHz,
+    `свободная камера: наклон ${(fr.pitch * 57.3).toFixed(0)}°, вертикали сходятся в третью точку, горизонтальные — в точки на горизонте`);
+  const orb0 = await page.evaluate(() => window.perspectiveScene.state.orbit);
+  await page.mouse.move(box2.x + box2.width * 0.5, box2.y + box2.height * 0.5);
+  await page.mouse.down();
+  await page.mouse.move(box2.x + box2.width * 0.5 + 120, box2.y + box2.height * 0.5 + 30, { steps: 6 });
+  await page.mouse.up();
+  ok((await page.evaluate(() => window.perspectiveScene.state.orbit)) !== orb0, "свободная камера: перетаскивание облетает сцену");
+  await page.locator("#scDist").fill("-500");
+  const fr2 = await page.evaluate(() => window.perspectiveScene.frame.D);
+  await page.locator("#scDist").fill("500");
+  ok((await page.evaluate(() => window.perspectiveScene.frame.D)) > fr2, "ползунок расстояния двигает камеру");
+  await page.click("#scFree");
+  ok((await page.evaluate(() => window.perspectiveScene.frame.pitch)) === 0, "обычная камера снова смотрит прямо");
+  // глазик: предмет прячется вместе с линиями и возвращается
+  const nObj = await page.evaluate(() => window.perspectiveScene.frame.objs.length);
+  await page.click('#scList [data-eye="0"]');
+  ok((await page.evaluate(() => window.perspectiveScene.state.off.join())) === "0" && /спрятано 1/.test(await page.locator("#scBadge").textContent()),
+    "глазик прячет предмет: " + (await page.locator("#scBadge").textContent()).slice(0, 50));
+  ok(await page.locator("#scAll").isVisible(), "появилась кнопка «Показать все»");
+  await page.click('#scList [data-eye="0"]');
+  ok((await page.evaluate(() => window.perspectiveScene.state.off.length)) === 0 && (await page.locator("#scAll").isHidden()), "второй щелчок по глазику возвращает предмет");
+  if (nObj > 1) {
+    await page.click('#scList [data-eye="1"]');
+    await page.click("#scAll");
+    ok((await page.evaluate(() => window.perspectiveScene.state.off.length)) === 0, "«Показать все» возвращает все предметы");
+  }
   // клавиши проверки не срабатывают на вкладке «Сцена»
   const rot0 = await page.evaluate(() => window.perspectiveChecker.state.rot);
   await page.keyboard.press("r");

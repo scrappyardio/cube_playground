@@ -119,6 +119,21 @@ body[data-tab="scene"] .check-only, body[data-tab="scene"] #help { display: none
 #scCv.drag { cursor: grabbing }
 #scCv.hz { cursor: ns-resize }
 #scCv.obj { cursor: pointer }
+.free #scCv { cursor: move }
+.lhead { display: flex; align-items: center; gap: 8px; margin-bottom: 6px }
+.lhead h2 { margin: 0 }
+.lhead .ghost { margin-left: auto; padding: 2px 9px; font-size: 12px }
+.olist { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px }
+.olist li { display: flex; align-items: center; gap: 8px; padding: 2px 4px; border-radius: 7px }
+.olist li.sel { background: color-mix(in srgb, var(--ink) 7%, transparent) }
+.olist .sw { width: 11px; height: 11px; border-radius: 3px; flex: none }
+.olist .nm { flex: 1; min-width: 0; text-align: left; border: 0; background: none; padding: 3px 0; cursor: pointer; font-size: 13px; color: var(--ink) }
+.olist .nm small { margin-left: 8px; color: var(--faint); font-size: 11.5px }
+.olist .eye { border: 0; background: none; padding: 3px 5px; border-radius: 6px; cursor: pointer; color: var(--ink); display: inline-flex }
+.olist .eye:hover { background: color-mix(in srgb, var(--ink) 8%, transparent) }
+.olist .eye svg { width: 19px; height: 19px }
+.olist li.off .nm, .olist li.off .sw { opacity: .4 }
+.olist li.off .eye { color: var(--faint) }
 .scseed { width: 84px; border: 1px solid var(--line); border-radius: 6px; padding: 3px 6px; background: var(--paper); font: 13px var(--mono) }
 .hrange, .orange { width: 100%; accent-color: var(--horizon); margin: 2px 0 0 }
 .orange { accent-color: var(--ink) }
@@ -367,6 +382,9 @@ body[data-tab="scene"] .check-only, body[data-tab="scene"] #help { display: none
           <input id="scSeed" class="scseed" type="number" min="1" max="999999" step="1" inputmode="numeric" aria-label="Номер сцены (seed)" title="Номер сцены: им можно поделиться">
           <button id="scNext" class="icon" title="Следующая" aria-label="Следующая сцена">▶</button>
         </div>
+        <div class="grp">
+          <button id="scFree" aria-pressed="false" title="Свободная камера (C): тащи сцену мышью — облёт и высота глаз; камера наклоняется, вертикали сходятся в третью точку"><svg viewBox="0 0 20 20"><rect x="2.5" y="5.5" width="11" height="9" rx="1.6" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M13.5 8.6l4-2.3v7.4l-4-2.3" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg><span>Свободная камера</span></button>
+        </div>
         <div class="grp" role="group" aria-label="Расстановка">
           <button data-lay="stack" title="Один столбик: предметы друг на друге">Стопка</button>
           <button data-lay="row" title="Предметы стоят рядом на полу">Рядом</button>
@@ -402,15 +420,23 @@ body[data-tab="scene"] .check-only, body[data-tab="scene"] #help { display: none
         <input type="range" id="scH" class="hrange" min="0" max="1000" step="1" aria-label="Высота горизонта">
         <div class="rlabels"><span>ниже: смотрю снизу</span><span>выше: смотрю сверху</span></div>
         <p class="scinfo" id="scHInfo"></p>
-        <p class="small">Линию горизонта можно тащить прямо на сцене, или <kbd>↑</kbd> <kbd>↓</kbd>.</p>
+        <p class="small">Линию горизонта можно тащить прямо на сцене (в обычной камере), или <kbd>↑</kbd> <kbd>↓</kbd>.</p>
         <h2 class="sc2">Поворот сцены</h2>
         <input type="range" id="scOrbit" class="orange" min="-180" max="180" step="1" aria-label="Поворот сцены">
         <div class="rlabels"><span>←</span><span id="scOrbitVal">0°</span><span>→</span></div>
+        <h2 class="sc2">Расстояние до сцены</h2>
+        <input type="range" id="scDist" class="orange" min="-600" max="900" step="1" aria-label="Расстояние до сцены">
+        <div class="rlabels"><span>ближе</span><span id="scDistVal"></span><span>дальше</span></div>
         <h2 class="sc2">Предметы повёрнуты</h2>
         <div class="seg" role="group" aria-label="Повороты предметов">
           <button id="scRotFree" aria-pressed="true" title="У каждого предмета свои точки схода">по-разному</button>
           <button id="scRotSame" aria-pressed="false" title="Все предметы повёрнуты одинаково: две общие точки схода">одинаково</button>
         </div>
+      </section>
+      <section class="card">
+        <div class="lhead"><h2>Предметы</h2><button id="scAll" class="ghost" hidden>Показать все</button></div>
+        <ul class="olist" id="scList"></ul>
+        <p class="small">Глазик прячет предмет вместе с его линиями. Щелчок по названию — только его линии.</p>
       </section>
       <section class="card">
         <h2>Что увидеть</h2>
@@ -421,6 +447,7 @@ body[data-tab="scene"] .check-only, body[data-tab="scene"] #help { display: none
           <li>Эллипсы тем уже, чем ближе к горизонту. Короткая ось эллипса идёт вдоль оси цилиндра.</li>
           <li>«Построение эллипсов»: круг вписан в квадрат в перспективе. Центр круга — на пересечении диагоналей, он дальше середины эллипса.</li>
         </ul>
+        <p class="small">«Свободная камера» (<kbd>C</kbd>): тащи сцену — камера облетает её и поднимается или опускается, глядя на середину. Камера наклоняется, и вертикали тоже сходятся — в третью точку. Shift или правая кнопка — сдвиг листа.</p>
         <p class="small">Щёлкни по предмету — останутся только его линии. Щелчок по пустому месту — снова все. Колесо — масштаб, перетаскивание — сдвиг.</p>
       </section>
     </aside>

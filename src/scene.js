@@ -15,6 +15,10 @@
     t: 0.42,
     orbit: 0,
     same: !1,
+    free: !1, // свободная камера: смотрит на середину сцены, вертикали сходятся
+    dist: 1, // расстояние до сцены относительно обычного
+    off: [], // спрятанные предметы (номера) этой сцены
+    offKey: "",
     show: { vp: !0, hor: !0, ell: !1, axis: !0, hid: !1 },
     tab: "check",
   };
@@ -128,14 +132,31 @@
     const Rs = Math.max(...scene.stacks.map((st) => Math.hypot(st.x, st.z) + st.rad)),
       Htot = Math.max(...scene.stacks.map((st) => st.H)),
       // камера близко: перспектива заметная, но край сцены не дальше ~30° от центра взгляда
-      D = Math.max(2.0 * Rs + 1.5, 1.7 * Htot + 1.5, 4.5),
-      f = Math.min((1000 * D) / (2 * Rs + 0.6), (600 * D) / Math.max(Htot, 0.8)),
+      D0 = Math.max(2.0 * Rs + 1.5, 1.7 * Htot + 1.5, 4.5),
+      // «Расстояние»: камера ближе или дальше, а сцена на экране того же размера (f растёт вместе с D) —
+      // меняется только сила перспективы
+      D = D0 * S.dist,
+      f = Math.min((1000 * D0) / (2 * Rs + 0.6), (600 * D0) / Math.max(Htot, 0.8)) * S.dist,
       hmin = 0.05,
-      hmax = Math.max(Htot * 2.3 + 1.2, 0.85 * D),
+      hmax = Math.max(Htot * 2.3 + 1.2, 0.85 * D0),
       h = hmin + S.t * (hmax - hmin),
-      hy = MID_Y + (f * (Htot / 2 - h)) / D;
-    const P = (x, y, z) => [CX + (f * x) / (z + D), hy - (f * (y - h)) / (z + D)];
-    const VP = (dx, dz) => (Math.abs(dz) < 1e-9 || Math.abs(dx / dz) > 60 ? null : [CX + (f * dx) / dz, hy]);
+      // Обычная камера смотрит горизонтально (вертикали вертикальны), сцена удерживается в кадре сдвигом
+      // объектива. Свободная камера смотрит на середину сцены: наклон даёт третью точку схода — вертикалей.
+      pitch = S.free ? Math.atan2(Htot / 2 - h, D) : 0,
+      sp = Math.sin(pitch),
+      cp = Math.cos(pitch),
+      cy0 = S.free ? MID_Y : MID_Y + (f * (Htot / 2 - h)) / D,
+      hy = cy0 + f * Math.tan(pitch);
+    const P = (x, y, z) => {
+      const ry = y - h,
+        rz = z + D,
+        yc = ry * cp - rz * sp,
+        zc = Math.max(1e-3, ry * sp + rz * cp);
+      return [CX + (f * x) / zc, cy0 - (f * yc) / zc];
+    };
+    // точка схода горизонтального направления (dx, dz) — всегда на линии горизонта
+    const VP = (dx, dz) => (Math.abs(dz * cp) < 1e-9 || Math.abs(dx / dz) > 60 ? null : [CX + (f * dx) / (dz * cp), hy]);
+    const vpY = Math.abs(sp) < 0.02 ? null : [CX, cy0 - (f * cp) / sp];
     const objs = [];
     scene.stacks.forEach((st, si) => {
       const sx = st.x * c - st.z * s,
@@ -148,11 +169,12 @@
         objs.push({ ...o, si, oi, X: sx + rx, Z: sz + rz, TH: (S.same ? scene.sameTh : o.th) + phi });
       });
     });
-    F = { D, f, h, hy, hmin, hmax, Htot, P, VP, cam: [0, h, -D], objs };
+    F = { D, f, h, hy, hmin, hmax, Htot, P, VP, vpY, pitch, cam: [0, h, -D], objs };
     objs.forEach((o, i) => ((o.i = i), Object.assign(o, o.type === "cube" || o.type === "box" ? boxGeo(o) : cylGeo(o))));
     F.order = drawOrder();
   }
 
+  const shown = (o) => !S.off.includes(o.i);
   const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
   const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 
@@ -315,9 +337,14 @@
     if (!F || !W) return;
     let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
     const add = (p) => ((x0 = Math.min(x0, p[0])), (x1 = Math.max(x1, p[0])), (y0 = Math.min(y0, p[1])), (y1 = Math.max(y1, p[1])));
-    for (const o of F.objs) o.pts.forEach(add), o.sqB && (o.sqB.forEach(add), o.sqT.forEach(add));
-    add([CX, F.hy]);
-    if (withVP) for (const o of F.objs) for (const p of [o.vps.u, o.vps.v]) p && Math.abs(p[0] - CX) < 40 * F.f && add(p);
+    const vis = F.objs.some(shown) ? F.objs.filter(shown) : F.objs;
+    for (const o of vis) o.pts.forEach(add), o.sqB && (o.sqB.forEach(add), o.sqT.forEach(add));
+    // горизонт — в кадр, если он не слишком далеко (у наклонённой камеры он может уйти далеко вверх/вниз)
+    if (Math.max(y0 - F.hy, F.hy - y1) < 1.2 * (y1 - y0)) add([CX, F.hy]);
+    if (withVP) {
+      for (const o of vis) for (const p of [o.vps.u, o.vps.v]) p && Math.abs(p[0] - CX) < 40 * F.f && add(p);
+      F.vpY && Math.abs(F.vpY[1] - MID_Y) < 40 * F.f && add(F.vpY);
+    }
     const pad = 40,
       s = Math.min((W - 2 * pad) / Math.max(1, x1 - x0), (H - 2 * pad) / Math.max(1, y1 - y0));
     view = { s, ox: W / 2 - (s * (x0 + x1)) / 2, oy: H / 2 - (s * (y0 + y1)) / 2 };
@@ -355,6 +382,7 @@
     // предметы, от дальних к ближним
     for (const i of F.order) {
       const o = F.objs[i];
+      if (!shown(o)) continue;
       if (!S.show.hid) (ctx.fillStyle = col.paper), ctx.fill(o.path);
       const c = o === sel_ ? colorOf(o) : col.ink,
         w = o === sel_ ? 2.4 : 1.7;
@@ -377,7 +405,7 @@
     };
     const usedVP = [];
     for (const o of F.objs) {
-      if (!focus(o)) continue;
+      if (!focus(o) || !shown(o)) continue;
       const c = colorOf(o),
         isCyl = o.type === "cyl" || o.type === "disc";
       if (isCyl && (S.show.vp || S.show.ell)) {
@@ -404,14 +432,20 @@
         }
         if (S.show.ell) for (let k = 0; k < 4; k++) stroke([o.sqB[k], o.sqT[k]], c, 1, [4, 3]);
       }
-      if (!isCyl && S.show.vp) for (const l of o.lines) l.dir !== "y" && toVP(l.pts[0], l.pts[1], o.vps[l.dir], c);
+      if (!isCyl && S.show.vp)
+        for (const l of o.lines)
+          if (l.dir !== "y") toVP(l.pts[0], l.pts[1], o.vps[l.dir], c);
+          else if (F.vpY) toVP(l.pts[0], l.pts[1], F.vpY, c); // наклонённая камера: вертикали сходятся в третью точку
       if (isCyl && S.show.axis) {
         const ext = (o.cB[1] - o.cT[1]) * 0.12 + px(8);
         stroke([[o.cB[0], o.cB[1] + ext], [o.cT[0], o.cT[1] - ext]], c, 1.2, [9, 3, 2, 3]);
+        if (F.vpY && S.show.vp) toVP(o.cB, o.cT, F.vpY, c);
       }
+      if (isCyl && S.show.ell && S.show.vp && F.vpY) for (let k = 0; k < 4; k++) toVP(o.sqB[k], o.sqT[k], F.vpY, c);
       if (S.show.vp) for (const vp of [o.vps.u, o.vps.v]) vp && usedVP.push([vp, c]);
     }
     ctx.globalAlpha = 1;
+    if (F.vpY && S.show.vp && F.objs.some((o) => shown(o) && focus(o))) usedVP.push([F.vpY, col.ink]);
     for (const [vp, c] of usedVP) {
       ctx.beginPath();
       ctx.arc(vp[0], vp[1], px(5), 0, 7);
@@ -430,10 +464,11 @@
   const fmt = (x) => String(Math.round(x * 10) / 10).replace(".", ",");
   function texts() {
     const eps = 0.02,
-      above = F.objs.filter((o) => o.y0 > F.h + eps).length,
-      below = F.objs.filter((o) => o.y0 + o.h < F.h - eps).length,
-      level = F.objs.length - above - below,
-      nVP = new Set(F.objs.flatMap((o) => [o.vps.u, o.vps.v]).filter(Boolean).map((p) => Math.round(p[0]))).size,
+      vis = F.objs.filter(shown),
+      above = vis.filter((o) => o.y0 > F.h + eps).length,
+      below = vis.filter((o) => o.y0 + o.h < F.h - eps).length,
+      level = vis.length - above - below,
+      nVP = new Set(vis.flatMap((o) => [o.vps.u, o.vps.v]).filter(Boolean).map((p) => Math.round(p[0]))).size,
       pct = Math.round((100 * F.h) / F.Htot);
     const parts = [];
     below && parts.push(`сверху видно ${below} ${plural(below, "предмет", "предмета", "предметов")}`);
@@ -442,18 +477,60 @@
     $("scHInfo").innerHTML =
       `Глаз на высоте <b>${fmt(F.h)}</b> при высоте сцены ${fmt(F.Htot)} (${pct}%): ` +
       (F.h < 0.3 ? "почти с пола, «взгляд лягушки». " : F.h > F.Htot * 1.6 ? "высоко над предметами, «взгляд птицы». " : "") +
-      parts.join(", ") + ".";
+      parts.join(", ") +
+      "." +
+      (S.free
+        ? ` Камера ${F.pitch < -0.02 ? "смотрит вниз" : F.pitch > 0.02 ? "смотрит вверх" : "смотрит прямо"} на ${Math.round(Math.abs((F.pitch * 180) / Math.PI))}°` +
+          (F.vpY ? `: вертикали сходятся в третью точку ${F.pitch < 0 ? "внизу" : "вверху"} (чёрная).` : ": вертикали почти параллельны.")
+        : "");
     const sl = sel >= 0 ? F.objs[sel] : null;
     $("scBadge").innerHTML = sl
       ? `<b>${NAMES[sl.type]}</b>${sl.oi ? ` (${sl.oi + 1}-й в стопке)` : ""}: ${sl.topVis ? "виден верх" : sl.botVis ? "виден низ" : "верх и низ на уровне глаз"} · щёлкни мимо, чтобы показать все`
-      : `<b>${F.objs.length} ${plural(F.objs.length, "предмет", "предмета", "предметов")}</b> · точек схода на горизонте: ${nVP}`;
+      : `<b>${vis.length} ${plural(vis.length, "предмет", "предмета", "предметов")}</b>${vis.length < F.objs.length ? ` (спрятано ${F.objs.length - vis.length})` : ""} · точек схода на горизонте: ${nVP}${F.vpY ? " + 1 для вертикалей" : ""}`;
     $("scStatus").textContent = `сцена ${S.seed}`;
     $("scOrbitVal").textContent = `${S.orbit}°`;
+    $("scDistVal").textContent = S.dist < 0.85 ? "близко: сильная перспектива" : S.dist > 1.3 ? "далеко: слабая перспектива" : "обычно";
+    renderList();
   }
+
+  // ---------- список предметов с «глазиком» ----------
+  const EYE_ON =
+    '<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M1.8 10s3-5.6 8.2-5.6S18.2 10 18.2 10s-3 5.6-8.2 5.6S1.8 10 1.8 10z" fill="none" stroke="currentColor" stroke-width="1.5"/><circle cx="10" cy="10" r="2.6" fill="currentColor"/></svg>';
+  const EYE_OFF =
+    '<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M1.8 10s3-5.6 8.2-5.6S18.2 10 18.2 10s-3 5.6-8.2 5.6S1.8 10 1.8 10z" fill="none" stroke="currentColor" stroke-width="1.5" opacity=".45"/><path d="M3 17L17 3" stroke="currentColor" stroke-width="1.7"/></svg>';
+  function renderList() {
+    const many = scene.stacks.length > 1,
+      rows = F.objs.map((o) => {
+        const on = shown(o),
+          tall = scene.stacks[o.si].objs.length > 1,
+          where = [many ? `стопка ${o.si + 1}` : "", tall ? `${o.oi + 1}-й снизу` : ""].filter(Boolean).join(" · ");
+        return `<li class="${on ? "" : "off"}${o.i === sel ? " sel" : ""}"><span class="sw" style="background:${colorOf(o)}"></span><button class="nm" data-pick="${o.i}" title="Показать только линии этого предмета">${NAMES[o.type][0].toUpperCase() + NAMES[o.type].slice(1)}<small>${where}</small></button><button class="eye" data-eye="${o.i}" aria-pressed="${on}" title="${on ? "Спрятать предмет и его линии" : "Показать предмет"}" aria-label="${on ? "Спрятать" : "Показать"}: ${NAMES[o.type]}${where ? ", " + where : ""}">${on ? EYE_ON : EYE_OFF}</button></li>`;
+      });
+    $("scList").innerHTML = rows.join("");
+    $("scAll").hidden = !S.off.length;
+  }
+  $("scList").addEventListener("click", (e) => {
+    const eye = e.target.closest("[data-eye]"),
+      nm = e.target.closest("[data-pick]");
+    if (eye) {
+      const i = +eye.dataset.eye;
+      S.off = S.off.includes(i) ? S.off.filter((j) => j !== i) : [...S.off, i];
+      if (S.off.includes(sel)) sel = -1;
+      sync();
+    } else if (nm) {
+      const i = +nm.dataset.pick;
+      if (S.off.includes(i)) S.off = S.off.filter((j) => j !== i);
+      sel = sel === i ? -1 : i;
+      sync();
+    }
+  });
+  $("scAll").onclick = () => ((S.off = []), sync());
 
   // ---------- управление ----------
   function rebuild(refit) {
     scene = generate(S.seed, S.layout, S.types);
+    const key = [S.seed, S.layout, KINDS.filter((k) => S.types[k]).join()].join("|");
+    if (S.offKey !== key) (S.off = []), (S.offKey = key);
     sel = -1;
     frame();
     refit && fit(!1);
@@ -467,6 +544,9 @@
     $("scSeed").value = S.seed;
     $("scH").value = Math.round(S.t * 1000);
     $("scOrbit").value = S.orbit;
+    $("scDist").value = Math.round(Math.log(S.dist) * 1000);
+    $("scFree").setAttribute("aria-pressed", S.free);
+    $("scStage").classList.toggle("free", S.free);
     document.querySelectorAll("#sceneTab [data-lay]").forEach((b) => b.setAttribute("aria-pressed", b.dataset.lay === S.layout));
     document.querySelectorAll("#sceneTab [data-ty]").forEach((b) => b.setAttribute("aria-pressed", !!S.types[b.dataset.ty]));
     $("scRotFree").setAttribute("aria-pressed", !S.same);
@@ -493,6 +573,8 @@
   );
   $("scH").addEventListener("input", (e) => setT(+e.target.value / 1000));
   $("scOrbit").addEventListener("input", (e) => ((S.orbit = +e.target.value), update()));
+  $("scDist").addEventListener("input", (e) => ((S.dist = Math.exp(+e.target.value / 1000)), update()));
+  $("scFree").onclick = () => ((S.free = !S.free), update(), userView || (fit(!1), draw()));
   $("scRotFree").onclick = () => ((S.same = !1), update());
   $("scRotSame").onclick = () => ((S.same = !0), update());
   const toggle = (k) => ((S.show[k] = !S.show[k]), sync());
@@ -507,12 +589,12 @@
   };
   const nearHorizon = (e) => {
     const r = cv.getBoundingClientRect();
-    return S.show.hor && F && Math.abs(e.clientY - r.top - (view.oy + view.s * F.hy)) < 8;
+    return S.show.hor && F && !S.free && Math.abs(e.clientY - r.top - (view.oy + view.s * F.hy)) < 8;
   };
   const pick = (p) => {
     for (let k = F.order.length - 1; k >= 0; k--) {
       const o = F.objs[F.order[k]];
-      if (hit.isPointInPath(o.path, p[0], p[1])) return o.i;
+      if (shown(o) && hit.isPointInPath(o.path, p[0], p[1])) return o.i;
     }
     return -1;
   };
@@ -520,9 +602,12 @@
   cv.addEventListener("pointerdown", (e) => {
     if (!F) return;
     cv.setPointerCapture(e.pointerId);
+    // свободная камера: тащить — облёт сцены (влево-вправо) и высота глаз (вверх-вниз);
+    // со Shift или правой кнопкой — сдвиг листа
+    const orbitDrag = S.free && e.button === 0 && !e.shiftKey;
     drag = nearHorizon(e)
       ? { type: "hz" }
-      : { type: "pan", x: e.clientX, y: e.clientY, ox: view.ox, oy: view.oy, moved: !1 };
+      : { type: orbitDrag ? "orbit" : "pan", x: e.clientX, y: e.clientY, ox: view.ox, oy: view.oy, orbit: S.orbit, t: S.t, moved: !1 };
     cv.classList.toggle("drag", drag.type === "pan");
   });
   cv.addEventListener("pointermove", (e) => {
@@ -530,6 +615,17 @@
     if (!drag) {
       cv.classList.toggle("hz", nearHorizon(e));
       cv.classList.toggle("obj", !nearHorizon(e) && pick(toPage(e)) >= 0);
+      return;
+    }
+    if (drag.type === "orbit") {
+      const dx = e.clientX - drag.x,
+        dy = e.clientY - drag.y;
+      if (Math.hypot(dx, dy) > 4) drag.moved = !0;
+      if (!drag.moved) return;
+      let o = Math.round(drag.orbit - dx * 0.4);
+      o = ((((o + 180) % 360) + 360) % 360) - 180;
+      S.orbit = o;
+      setT(drag.t + dy / 400);
       return;
     }
     if (drag.type === "hz") {
@@ -546,7 +642,7 @@
     }
   });
   const end = (e) => {
-    if (drag && drag.type === "pan" && !drag.moved) {
+    if (drag && (drag.type === "pan" || drag.type === "orbit") && !drag.moved) {
       sel = pick(toPage(e));
       texts();
       draw();
@@ -555,6 +651,7 @@
     cv.classList.remove("drag");
   };
   cv.addEventListener("pointerup", end);
+  cv.addEventListener("contextmenu", (e) => e.preventDefault()); // правая кнопка — сдвиг
   cv.addEventListener("pointercancel", () => ((drag = null), cv.classList.remove("drag")));
   cv.addEventListener(
     "wheel",
@@ -583,6 +680,7 @@
     else if (k === "h" || k === "р") toggle("hor");
     else if (k === "e" || k === "у") toggle("ell");
     else if (k === "x" || k === "ч") toggle("hid");
+    else if (k === "c" || k === "с") $("scFree").click();
     else if (k === "f" || k === "а") $("scFit").click();
     else if (k === "v" || k === "м") $("scFitVP").click();
     else if (k === "escape") (sel = -1), texts(), draw();
